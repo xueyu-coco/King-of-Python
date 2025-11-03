@@ -277,14 +277,84 @@ def make_rage_face():
 
     # convert to BGR for OpenCV display
     display_bgr = cv2.cvtColor(display_img, cv2.COLOR_RGBA2BGR)
-    cv2.imshow('Capture Preview (original | stylized | sketch) - press any key to save', display_bgr)
-    cv2.waitKey(0)
+    window_title = 'Capture Preview (original | stylized | sketch) - s=save, q=quit'
+    cv2.imshow(window_title, display_bgr)
+
+    # Pixel-art stylizer function (map to small grid + palette)
+    def stylize_pixel_art(pil_img, out_size=64):
+        # reduce to small size (pixelate)
+        small = pil_img.convert('RGB').resize((out_size, out_size), resample=Image.NEAREST)
+
+        # palette: outline, main, shade, highlight, mouth pink, eye green
+        palette = [
+            (30, 30, 30),    # dark outline
+            (255, 223, 0),   # main yellow
+            (200, 170, 0),   # darker side
+            (255, 245, 102), # highlight
+            (255, 102, 179), # pink mouth
+            (34, 139, 34),   # green eye
+        ]
+
+        arr = np.array(small)
+        h, w = arr.shape[:2]
+        out = np.zeros((h, w, 3), dtype=np.uint8)
+
+        # map each pixel to nearest palette color
+        pal = np.array(palette)
+        for y in range(h):
+            for x in range(w):
+                p = arr[y, x]
+                d = np.sum((pal - p) ** 2, axis=1)
+                out[y, x] = pal[np.argmin(d)]
+
+        # upscale to view size
+        up = Image.fromarray(out).resize((512, 512), resample=Image.NEAREST)
+
+        # add dark outline by edge detection on luminance then darken those pixels
+        up_np = np.array(up.convert('RGB'))
+        gray = cv2.cvtColor(up_np, cv2.COLOR_RGB2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edges = cv2.dilate(edges, np.ones((3,3), np.uint8), iterations=1)
+        up_np[edges != 0] = (30, 30, 30)
+        return Image.fromarray(up_np)
+
+    # interactive save/quit loop with auto-timeout
+    start = time.time()
+    timeout = 5.0  # seconds until auto-save
+    saved = False
+    while True:
+        key = cv2.waitKey(100) & 0xFF
+        # s, enter, space -> save
+        if key in (ord('s'), 13, 32):
+            saved = True
+            break
+        # q or ESC -> quit without saving
+        if key in (ord('q'), 27):
+            saved = False
+            break
+        # auto-save after timeout
+        if time.time() - start > timeout:
+            saved = True
+            break
+
     cv2.destroyAllWindows()
 
-    filename = os.path.join(out_dir, f'rage_face_{int(time.time())}.png')
-    styled.save(filename)
-    print('Saved:', filename)
-    return filename
+    if saved:
+        # save stylized and pixel art versions
+        ts = int(time.time())
+        filename_styled = os.path.join(out_dir, f'rage_face_{ts}.png')
+        filename_pixel = os.path.join(out_dir, f'rage_face_pixel_{ts}.png')
+        styled.save(filename_styled)
+        try:
+            pixel = stylize_pixel_art(pil)
+            pixel.save(filename_pixel)
+            print('Saved:', filename_styled, filename_pixel)
+        except Exception as e:
+            print('Saved styled only:', filename_styled, ' (pixel art failed:', e, ')')
+        return filename_styled
+    else:
+        print('Preview closed without saving')
+        return None
 
 
 if __name__ == '__main__':
