@@ -281,60 +281,60 @@ def make_rage_face():
     cv2.imshow(window_title, display_bgr)
 
     # Pixel-art stylizer function (map to small grid + palette)
-    def stylize_pixel_art(pil_img, out_size=64):
+    def stylize_pixel_art(pil_img, out_size=48):
         # reduce to small size (pixelate)
-        small = pil_img.convert('RGB').resize((out_size, out_size), resample=Image.NEAREST)
+        small = pil_img.convert('RGBA').resize((out_size, out_size), resample=Image.NEAREST)
 
-        # palette: outline, main, shade, highlight, mouth pink, eye green
+        # palette tuned to the attached sprite (flattened)
         palette = [
-            (30, 30, 30),    # dark outline
-            (255, 223, 0),   # main yellow
-            (200, 170, 0),   # darker side
-            (255, 245, 102), # highlight
-            (255, 102, 179), # pink mouth
-            (34, 139, 34),   # green eye
+            (24, 24, 24, 255),   # dark outline
+            (221, 180, 27, 255),  # main yellow
+            (170, 136, 22, 255),  # darker side
+            (255, 233, 90, 255),  # highlight
+            (230, 90, 170, 255),  # pink mouth
+            (24, 120, 24, 255),   # green eye
+            (0, 0, 0, 0),         # transparent
         ]
 
         arr = np.array(small)
         h, w = arr.shape[:2]
-        out = np.zeros((h, w, 3), dtype=np.uint8)
+        out = np.zeros((h, w, 4), dtype=np.uint8)
 
-        # map each pixel to nearest palette color
         pal = np.array(palette)
         for y in range(h):
             for x in range(w):
                 p = arr[y, x]
-                d = np.sum((pal - p) ** 2, axis=1)
-                out[y, x] = pal[np.argmin(d)]
+                # if pixel mostly transparent, set transparent
+                if p[3] < 30:
+                    out[y, x] = pal[-1]
+                    continue
+                d = np.sum((pal[:, :3] - p[:3]) ** 2, axis=1)
+                idx = int(np.argmin(d[:-1]))  # exclude transparent from matching
+                out[y, x] = pal[idx]
 
-        # upscale to view size
-        up = Image.fromarray(out).resize((512, 512), resample=Image.NEAREST)
+        # upscale to view size using nearest neighbor to keep hard pixels
+        up = Image.fromarray(out, mode='RGBA').resize((512, 512), resample=Image.NEAREST)
 
-        # add dark outline by edge detection on luminance then darken those pixels
+        # ensure strong outline: detect edges on alpha-weighted luminance
         up_np = np.array(up.convert('RGB'))
         gray = cv2.cvtColor(up_np, cv2.COLOR_RGB2GRAY)
         edges = cv2.Canny(gray, 50, 150)
-        edges = cv2.dilate(edges, np.ones((3,3), np.uint8), iterations=1)
-        up_np[edges != 0] = (30, 30, 30)
+        edges = cv2.dilate(edges, np.ones((2,2), np.uint8), iterations=1)
+        up_np[edges != 0] = (24, 24, 24)
         return Image.fromarray(up_np)
 
-    # interactive save/quit loop with auto-timeout
-    start = time.time()
-    timeout = 5.0  # seconds until auto-save
+    # interactive save/quit loop (no auto-save) - require explicit 's' to save or 'q' to quit
     saved = False
+    print("Preview shown. Press 's' to save, 'q' to quit without saving.")
     while True:
-        key = cv2.waitKey(100) & 0xFF
-        # s, enter, space -> save
-        if key in (ord('s'), 13, 32):
+        key = cv2.waitKey(0) & 0xFF
+        # s -> save
+        if key == ord('s'):
             saved = True
             break
         # q or ESC -> quit without saving
         if key in (ord('q'), 27):
             saved = False
-            break
-        # auto-save after timeout
-        if time.time() - start > timeout:
-            saved = True
             break
 
     cv2.destroyAllWindows()
