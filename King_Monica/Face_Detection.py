@@ -238,6 +238,83 @@ def stylize_rage_comic(pil_img):
     return pil_canvas
 
 
+# Pixel-art stylizer function (map to small grid + palette)
+def stylize_sprite(pil_img, sprite_size=32, scale=12):
+    """Convert the circular face image into a pixel-sprite using a small palette.
+    sprite_size: the small pixel grid size (e.g., 24)
+    scale: upscale factor for final PNG (sprite_size * scale)
+    """
+    small = pil_img.convert('RGBA').resize((sprite_size, sprite_size), resample=Image.NEAREST)
+
+    # palette sampled/tuned to match the provided reference sprite
+    palette = [
+        (60, 48, 18, 255),     # dark outline / border
+        (245, 213, 40, 255),   # main yellow
+        (190, 144, 22, 255),   # darker side shade
+        (255, 245, 120, 255),  # highlight (bright yellow)
+        (206, 30, 130, 255),   # mouth magenta / dark pink
+        (255, 150, 200, 255),  # mouth light pink
+        (45, 95, 30, 255),     # green eye
+        (120, 110, 90, 255),   # mid brown / metal accent
+    ]
+
+    pal = np.array(palette, dtype=np.int32)
+    arr = np.array(small)
+    h, w = arr.shape[:2]
+    out = np.zeros((h, w, 4), dtype=np.uint8)
+    # Heuristics to force yellow style:
+    # - If pixel is bluish, map it toward yellow palette
+    # - Preserve pink/magenta for mouth if strongly pink
+    # - Preserve green for eyes if strongly green
+    for y in range(h):
+        for x in range(w):
+            px = arr[y, x]
+            # preserve transparency outside circular mask
+            if px[3] < 30:
+                out[y, x] = (0, 0, 0, 0)
+                continue
+            r, g, b, a = px
+
+            # detect mouth-like magenta/pink
+            if r > 180 and g < 120 and b > 130:
+                # map to mouth pinks in palette (index 4 or 5)
+                out[y, x] = palette[4] if r < 230 else palette[5]
+                continue
+
+            # detect green eyes
+            if g > 90 and r < 120 and b < 100:
+                out[y, x] = palette[6]
+                continue
+
+            # detect bluish pixels and remap toward yellow
+            if b > r and b > g and b > 100:
+                # create a yellowish RGB based on original luminance
+                lum = int((r * 0.3 + g * 0.59 + b * 0.11))
+                # choose between main and highlight depending on x (light from right)
+                if x > w * 0.6:
+                    out[y, x] = palette[3]
+                else:
+                    out[y, x] = palette[1]
+                continue
+
+            # otherwise choose nearest yellow/brown in palette by color distance
+            d = np.sum((pal[:, :3] - px[:3]) ** 2, axis=1)
+            best = int(np.argmin(d))
+            out[y, x] = tuple(pal[best])
+
+    # Upscale using nearest neighbor to keep pixelated look
+    final = Image.fromarray(out, mode='RGBA').resize((sprite_size * scale, sprite_size * scale), resample=Image.NEAREST)
+
+    # Add a 1-pixel outline by detecting transparent->opaque edges
+    final_np = np.array(final)
+    alpha = final_np[:, :, 3]
+    edges = cv2.Canny(alpha, 1, 255)
+    edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+    # paint edges dark
+    final_np[edges != 0] = (24, 24, 24, 255)
+    return Image.fromarray(final_np, mode='RGBA')
+
+
 def make_rage_face():
     out_dir = ensure_outputs_dir()
     frame, face = capture_face_image(wait_seconds=3)
@@ -261,10 +338,13 @@ def make_rage_face():
 
     styled = stylize_rage_comic(circ)
     sketch = line_art(pil)
+    # generate sprite preview
+    sprite = stylize_sprite(circ)
 
     # show side-by-side preview: original cropped circular image and the hand-drawn line-art
     orig_np = cv2.cvtColor(np.array(circ.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
     styl_np = cv2.cvtColor(np.array(styled.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
+    sprite_np = cv2.cvtColor(np.array(sprite.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
     sketch_np = cv2.cvtColor(np.array(sketch.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
 
     # compose a display image: left original, middle styled, right sketch
@@ -272,7 +352,7 @@ def make_rage_face():
     display_w = 512 * 3
     display_img = np.zeros((display_h, display_w, 4), dtype=np.uint8)
     display_img[:, 0:512] = orig_np
-    display_img[:, 512:1024] = styl_np
+    display_img[:, 512:1024] = sprite_np
     display_img[:, 1024:1536] = sketch_np
 
     # convert to BGR for OpenCV display
@@ -280,52 +360,6 @@ def make_rage_face():
     window_title = 'Capture Preview (original | stylized | sketch) - s=save, q=quit'
     cv2.imshow(window_title, display_bgr)
 
-    # Pixel-art stylizer function (map to small grid + palette)
-    def stylize_sprite(pil_img, sprite_size=24, scale=16):
-        """Convert the circular face image into a pixel-sprite using a small palette.
-        sprite_size: the small pixel grid size (e.g., 24)
-        scale: upscale factor for final PNG (sprite_size * scale)
-        """
-        small = pil_img.convert('RGBA').resize((sprite_size, sprite_size), resample=Image.NEAREST)
-
-        # sprite palette (closer to provided sample)
-        palette = [
-            (24, 24, 24, 255),    # outline
-            (235, 190, 30, 255),   # main yellow
-            (185, 145, 22, 255),   # darker side
-            (255, 245, 110, 255),  # highlight
-            (230, 100, 180, 255),  # pink mouth
-            (40, 120, 40, 255),    # green eye
-        ]
-
-        pal = np.array(palette, dtype=np.int32)
-        arr = np.array(small)
-        h, w = arr.shape[:2]
-        out = np.zeros((h, w, 4), dtype=np.uint8)
-
-        for y in range(h):
-            for x in range(w):
-                px = arr[y, x]
-                # preserve transparency outside circular mask
-                if px[3] < 30:
-                    out[y, x] = (0, 0, 0, 0)
-                    continue
-                # pick nearest palette color by RGB distance
-                d = np.sum((pal[:, :3] - px[:3]) ** 2, axis=1)
-                best = int(np.argmin(d))
-                out[y, x] = tuple(pal[best])
-
-        # Upscale using nearest neighbor to keep pixelated look
-        final = Image.fromarray(out, mode='RGBA').resize((sprite_size * scale, sprite_size * scale), resample=Image.NEAREST)
-
-        # Add a 1-pixel outline by detecting transparent->opaque edges
-        final_np = np.array(final)
-        alpha = final_np[:, :, 3]
-        edges = cv2.Canny(alpha, 1, 255)
-        edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
-        # paint edges dark
-        final_np[edges != 0] = (24, 24, 24, 255)
-        return Image.fromarray(final_np, mode='RGBA')
 
     # interactive save/quit loop (no auto-save) - require explicit 's' to save or 'q' to quit
     saved = False
@@ -346,16 +380,13 @@ def make_rage_face():
     if saved:
         # save stylized and pixel art versions
         ts = int(time.time())
+        # save sprite as primary output and also save styled version
+        filename_sprite = os.path.join(out_dir, f'rage_face_sprite_{ts}.png')
         filename_styled = os.path.join(out_dir, f'rage_face_{ts}.png')
-        filename_pixel = os.path.join(out_dir, f'rage_face_pixel_{ts}.png')
+        sprite.save(filename_sprite)
         styled.save(filename_styled)
-        try:
-            pixel = stylize_sprite(circ)
-            pixel.save(filename_pixel)
-            print('Saved:', filename_styled, filename_pixel)
-        except Exception as e:
-            print('Saved styled only:', filename_styled, ' (pixel art failed:', e, ')')
-        return filename_styled
+        print('Saved:', filename_sprite, filename_styled)
+        return filename_sprite
     else:
         print('Preview closed without saving')
         return None
