@@ -281,47 +281,51 @@ def make_rage_face():
     cv2.imshow(window_title, display_bgr)
 
     # Pixel-art stylizer function (map to small grid + palette)
-    def stylize_pixel_art(pil_img, out_size=48):
-        # reduce to small size (pixelate)
-        small = pil_img.convert('RGBA').resize((out_size, out_size), resample=Image.NEAREST)
+    def stylize_sprite(pil_img, sprite_size=24, scale=16):
+        """Convert the circular face image into a pixel-sprite using a small palette.
+        sprite_size: the small pixel grid size (e.g., 24)
+        scale: upscale factor for final PNG (sprite_size * scale)
+        """
+        small = pil_img.convert('RGBA').resize((sprite_size, sprite_size), resample=Image.NEAREST)
 
-        # palette tuned to the attached sprite (flattened)
+        # sprite palette (closer to provided sample)
         palette = [
-            (24, 24, 24, 255),   # dark outline
-            (221, 180, 27, 255),  # main yellow
-            (170, 136, 22, 255),  # darker side
-            (255, 233, 90, 255),  # highlight
-            (230, 90, 170, 255),  # pink mouth
-            (24, 120, 24, 255),   # green eye
-            (0, 0, 0, 0),         # transparent
+            (24, 24, 24, 255),    # outline
+            (235, 190, 30, 255),   # main yellow
+            (185, 145, 22, 255),   # darker side
+            (255, 245, 110, 255),  # highlight
+            (230, 100, 180, 255),  # pink mouth
+            (40, 120, 40, 255),    # green eye
         ]
 
+        pal = np.array(palette, dtype=np.int32)
         arr = np.array(small)
         h, w = arr.shape[:2]
         out = np.zeros((h, w, 4), dtype=np.uint8)
 
-        pal = np.array(palette)
         for y in range(h):
             for x in range(w):
-                p = arr[y, x]
-                # if pixel mostly transparent, set transparent
-                if p[3] < 30:
-                    out[y, x] = pal[-1]
+                px = arr[y, x]
+                # preserve transparency outside circular mask
+                if px[3] < 30:
+                    out[y, x] = (0, 0, 0, 0)
                     continue
-                d = np.sum((pal[:, :3] - p[:3]) ** 2, axis=1)
-                idx = int(np.argmin(d[:-1]))  # exclude transparent from matching
-                out[y, x] = pal[idx]
+                # pick nearest palette color by RGB distance
+                d = np.sum((pal[:, :3] - px[:3]) ** 2, axis=1)
+                best = int(np.argmin(d))
+                out[y, x] = tuple(pal[best])
 
-        # upscale to view size using nearest neighbor to keep hard pixels
-        up = Image.fromarray(out, mode='RGBA').resize((512, 512), resample=Image.NEAREST)
+        # Upscale using nearest neighbor to keep pixelated look
+        final = Image.fromarray(out, mode='RGBA').resize((sprite_size * scale, sprite_size * scale), resample=Image.NEAREST)
 
-        # ensure strong outline: detect edges on alpha-weighted luminance
-        up_np = np.array(up.convert('RGB'))
-        gray = cv2.cvtColor(up_np, cv2.COLOR_RGB2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edges = cv2.dilate(edges, np.ones((2,2), np.uint8), iterations=1)
-        up_np[edges != 0] = (24, 24, 24)
-        return Image.fromarray(up_np)
+        # Add a 1-pixel outline by detecting transparent->opaque edges
+        final_np = np.array(final)
+        alpha = final_np[:, :, 3]
+        edges = cv2.Canny(alpha, 1, 255)
+        edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+        # paint edges dark
+        final_np[edges != 0] = (24, 24, 24, 255)
+        return Image.fromarray(final_np, mode='RGBA')
 
     # interactive save/quit loop (no auto-save) - require explicit 's' to save or 'q' to quit
     saved = False
@@ -346,7 +350,7 @@ def make_rage_face():
         filename_pixel = os.path.join(out_dir, f'rage_face_pixel_{ts}.png')
         styled.save(filename_styled)
         try:
-            pixel = stylize_pixel_art(pil)
+            pixel = stylize_sprite(circ)
             pixel.save(filename_pixel)
             print('Saved:', filename_styled, filename_pixel)
         except Exception as e:
