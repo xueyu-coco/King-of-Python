@@ -238,25 +238,85 @@ def stylize_rage_comic(pil_img):
     return pil_canvas
 
 
+def stylize_cute(pil_img):
+    """Produce a cute, soft stylized avatar: smooth colors, big eyes, blush and a small smile."""
+    base = pil_img.convert('RGBA')
+    base = ImageOps.fit(base, (512, 512))
+
+    # smooth colors with bilateral filter
+    bgr = cv2.cvtColor(np.array(base.convert('RGB')), cv2.COLOR_RGB2BGR)
+    smooth = cv2.bilateralFilter(bgr, d=9, sigmaColor=100, sigmaSpace=75)
+    img = Image.fromarray(cv2.cvtColor(smooth, cv2.COLOR_BGR2RGB)).convert('RGBA')
+    draw = ImageDraw.Draw(img, 'RGBA')
+    w, h = img.size
+
+    # big white eyes
+    eye_r = w // 12
+    lx = w // 3
+    rx = 2 * w // 3
+    eye_y = h // 3
+    draw.ellipse((lx - eye_r, eye_y - eye_r, lx + eye_r, eye_y + eye_r), fill=(255, 255, 255, 255))
+    draw.ellipse((rx - eye_r, eye_y - eye_r, rx + eye_r, eye_y + eye_r), fill=(255, 255, 255, 255))
+
+    # pupils (slightly low for cute look)
+    pup_r = max(3, eye_r // 3)
+    draw.ellipse((lx - pup_r, eye_y, lx + pup_r, eye_y + pup_r * 2), fill=(40, 40, 40, 255))
+    draw.ellipse((rx - pup_r, eye_y, rx + pup_r, eye_y + pup_r * 2), fill=(40, 40, 40, 255))
+
+    # sparkles
+    draw.ellipse((lx + eye_r - 6, eye_y - eye_r + 6, lx + eye_r - 2, eye_y - eye_r + 10), fill=(255, 255, 255, 255))
+    draw.ellipse((rx - eye_r + 2, eye_y - eye_r + 6, rx - eye_r + 6, eye_y - eye_r + 10), fill=(255, 255, 255, 255))
+
+    # small smiling mouth (soft arc)
+    mx = w // 2
+    my = 2 * h // 3
+    mouth_box = (mx - 28, my - 8, mx + 28, my + 18)
+    draw.arc(mouth_box, start=0, end=180, fill=(150, 40, 80, 255), width=6)
+
+    # blush cheeks
+    blush_r = w // 18
+    draw.ellipse((lx - blush_r - 6, my - 4, lx - 6, my + blush_r), fill=(255, 140, 170, 120))
+    draw.ellipse((rx + 6, my - 4, rx + blush_r + 6, my + blush_r), fill=(255, 140, 170, 120))
+
+    # gentle warm overlay for pastel toning
+    overlay = Image.new('RGBA', img.size, (255, 240, 240, 30))
+    img = Image.alpha_composite(img, overlay)
+
+    return img
+
+
 # Pixel-art stylizer function (map to small grid + palette)
-def stylize_sprite(pil_img, sprite_size=32, scale=12):
+def stylize_sprite(pil_img, sprite_size=32, scale=12, palette_mode='default'):
     """Convert the circular face image into a pixel-sprite using a small palette.
     sprite_size: the small pixel grid size (e.g., 24)
     scale: upscale factor for final PNG (sprite_size * scale)
     """
     small = pil_img.convert('RGBA').resize((sprite_size, sprite_size), resample=Image.NEAREST)
 
-    # palette sampled/tuned to match the provided reference sprite
-    palette = [
-        (60, 48, 18, 255),     # dark outline / border
-        (245, 213, 40, 255),   # main yellow
-        (190, 144, 22, 255),   # darker side shade
-        (255, 245, 120, 255),  # highlight (bright yellow)
-        (206, 30, 130, 255),   # mouth magenta / dark pink
-        (255, 150, 200, 255),  # mouth light pink
-        (45, 95, 30, 255),     # green eye
-        (120, 110, 90, 255),   # mid brown / metal accent
-    ]
+    # palette choices: default (reference) or 'cute' (pastel)
+    if palette_mode == 'cute':
+        palette = [
+            (70, 50, 30, 255),    # outline
+            (255, 220, 140, 255),  # soft yellow / skin
+            (220, 180, 90, 255),   # soft shadow
+            (255, 245, 200, 255),  # highlight
+            (255, 120, 170, 255),  # mouth pink
+            (255, 190, 210, 255),  # light pink
+            (120, 200, 140, 255),  # soft green eye
+            (180, 140, 110, 255),  # mid brown
+        ]
+    else:
+        # palette sampled/tuned to match the provided reference sprite
+        palette = [
+            (60, 48, 18, 255),     # dark outline / border
+            (245, 213, 40, 255),   # main yellow
+            (190, 144, 22, 255),   # darker side shade
+            (255, 245, 120, 255),  # highlight (bright yellow)
+            (206, 30, 130, 255),   # mouth magenta / dark pink
+            (255, 150, 200, 255),  # mouth light pink
+            (45, 95, 30, 255),     # green eye
+            (120, 110, 90, 255),   # mid brown / metal accent
+        ]
 
     pal = np.array(palette, dtype=np.int32)
     arr = np.array(small)
@@ -286,15 +346,9 @@ def stylize_sprite(pil_img, sprite_size=32, scale=12):
                 out[y, x] = palette[6]
                 continue
 
-            # detect bluish pixels and remap toward yellow
+            # detect bluish pixels and remap toward yellow / pastel depending on mode
             if b > r and b > g and b > 100:
-                # create a yellowish RGB based on original luminance
-                lum = int((r * 0.3 + g * 0.59 + b * 0.11))
-                # choose between main and highlight depending on x (light from right)
-                if x > w * 0.6:
-                    out[y, x] = palette[3]
-                else:
-                    out[y, x] = palette[1]
+                out[y, x] = palette[3] if x > w * 0.6 else palette[1]
                 continue
 
             # otherwise choose nearest yellow/brown in palette by color distance
@@ -336,24 +390,22 @@ def make_rage_face():
         sketch = ImageOps.invert(sketch).convert('RGBA')
         return sketch
 
-    styled = stylize_rage_comic(circ)
-    sketch = line_art(pil)
-    # generate sprite preview
-    sprite = stylize_sprite(circ)
+    # generate cute styled and sprite previews
+    styled = stylize_cute(circ)
+    sprite = stylize_sprite(circ, palette_mode='cute')
 
-    # show side-by-side preview: original cropped circular image and the hand-drawn line-art
+    # show side-by-side preview: original cropped circular image, cute styled, and pixel sprite
     orig_np = cv2.cvtColor(np.array(circ.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
     styl_np = cv2.cvtColor(np.array(styled.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
     sprite_np = cv2.cvtColor(np.array(sprite.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
-    sketch_np = cv2.cvtColor(np.array(sketch.resize((512, 512))), cv2.COLOR_RGBA2BGRA)
 
-    # compose a display image: left original, middle styled, right sketch
+    # compose a display image: left original, middle styled, right sprite
     display_h = 512
     display_w = 512 * 3
     display_img = np.zeros((display_h, display_w, 4), dtype=np.uint8)
     display_img[:, 0:512] = orig_np
-    display_img[:, 512:1024] = sprite_np
-    display_img[:, 1024:1536] = sketch_np
+    display_img[:, 512:1024] = styl_np
+    display_img[:, 1024:1536] = sprite_np
 
     # convert to BGR for OpenCV display
     display_bgr = cv2.cvtColor(display_img, cv2.COLOR_RGBA2BGR)
