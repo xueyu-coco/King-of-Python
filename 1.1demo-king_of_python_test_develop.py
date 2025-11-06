@@ -526,39 +526,44 @@ def main():
                 game_over = True
                 winner = "PLAYER 1"
         
-        # 绘制
-        screen.fill(BG_COLOR)
-        
-        # 绘制平台
-        draw_platform(screen, platform)
-        
-        # 绘制泡泡
-        for bubble in bubbles:
-            bubble.draw(screen)
-        
-        # 绘制玩家
-        player1.draw(screen)
-        player2.draw(screen)
+        # 绘制（对 display 操作做容错，若窗口被关闭则优雅退出）
+        try:
+            screen.fill(BG_COLOR)
 
-        # 绘制UI
-        draw_ui(screen, player1, player2, p1_avatar=local_p1, p2_avatar=local_p2)
+            # 绘制平台
+            draw_platform(screen, platform)
 
-        # 游戏结束画面
-        if game_over:
-            overlay = pygame.Surface((WIDTH, HEIGHT))
-            overlay.set_alpha(200)
-            overlay.fill(BLACK)
-            screen.blit(overlay, (0, 0))
+            # 绘制泡泡
+            for bubble in bubbles:
+                bubble.draw(screen)
 
-            win_text = font_large.render(f"{winner} WINS!", True, ORANGE)
-            win_rect = win_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
-            screen.blit(win_text, win_rect)
+            # 绘制玩家
+            player1.draw(screen)
+            player2.draw(screen)
 
-            restart_text = font_medium.render("Press SPACE to restart", True, WHITE)
-            restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
-            screen.blit(restart_text, restart_rect)
+            # 绘制UI
+            draw_ui(screen, player1, player2, p1_avatar=local_p1, p2_avatar=local_p2)
 
-        pygame.display.flip()
+            # 游戏结束画面
+            if game_over:
+                overlay = pygame.Surface((WIDTH, HEIGHT))
+                overlay.set_alpha(200)
+                overlay.fill(BLACK)
+                screen.blit(overlay, (0, 0))
+
+                win_text = font_large.render(f"{winner} WINS!", True, ORANGE)
+                win_rect = win_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+                screen.blit(win_text, win_rect)
+
+                restart_text = font_medium.render("Press SPACE to restart", True, WHITE)
+                restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+                screen.blit(restart_text, restart_rect)
+
+            pygame.display.flip()
+        except pygame.error:
+            # Display was closed (for example by user or by another window).
+            print("Pygame display closed; exiting game loop.")
+            running = False
     
     pygame.quit()
 
