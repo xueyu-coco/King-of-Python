@@ -177,3 +177,11 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
         cv2.destroyAllWindows()
 
     return saved_path
+
+if __name__ == "__main__":
+    print("Starting face capture demo. Press 'c' or SPACE to capture, 'q' or ESC to quit.")
+    path = capture_and_make_sprite("DemoUser")
+    if path:
+        print(f"Captured image saved at: {path}")
+    else:
+        print("No image captured.")
