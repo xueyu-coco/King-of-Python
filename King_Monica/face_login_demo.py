@@ -62,6 +62,29 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
 
             # show a flipped preview (like a mirror) to help framing
             preview = cv2.flip(frame, 1)
+
+            # draw a dashed circular guide in the preview to help users center their face
+            try:
+                ph, pw = preview.shape[:2]
+                # inner padding should match compose_head inner padding approx
+                inner_padding = 24
+                diameter = max(8, min(pw, ph) - inner_padding * 2)
+                radius = int(diameter // 2)
+                center = (pw // 2, ph // 2)
+
+                # dashed circle parameters
+                dash_deg = 12
+                gap_deg = 8
+                thickness = 2
+                color = (0, 255, 0)  # green guide
+
+                for start in range(0, 360, dash_deg + gap_deg):
+                    end = start + dash_deg
+                    cv2.ellipse(preview, center, (radius, radius), 0, start, end, color, thickness)
+            except Exception:
+                # if anything fails drawing the guide, ignore and continue
+                pass
+
             cv2.imshow(window_name, preview)
 
             key = cv2.waitKey(1) & 0xFF
