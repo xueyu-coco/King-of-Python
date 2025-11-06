@@ -245,27 +245,14 @@ class Player:
             try:
                 sprite = pygame.transform.smoothscale(avatar, (self.width, self.height))
                 screen.blit(sprite, (int(self.x), int(self.y)))
-                # 绘制边框以保留原有样式
-                pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
             except Exception:
-                # 回退到原始方块绘制
+                # 回退到原始方块绘制（无边框）
                 pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
-                pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
         else:
+            # 仅绘制填充色方块（不再绘制黑色边框或眼睛）
             pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
-            pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
         
-        # 绘制眼睛
-        eye_y = int(self.y + 15)
-        if self.facing_right:
-            left_eye = (int(self.x + 12), eye_y)
-            right_eye = (int(self.x + 28), eye_y)
-        else:
-            left_eye = (int(self.x + 12), eye_y)
-            right_eye = (int(self.x + 28), eye_y)
-        
-        pygame.draw.circle(screen, BLACK, left_eye, 4)
-        pygame.draw.circle(screen, BLACK, right_eye, 4)
+        # 眼睛与边框已移除 — 现在只显示头像或填充色方块
         
         # 如果有pow泡泡，显示指示器
         if self.has_pow_bubble:
