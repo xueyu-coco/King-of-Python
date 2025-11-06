@@ -175,7 +175,7 @@ class Player:
         # 应用击退
         self.knockback_x = knockback_direction * 15
     
-    def draw(self, screen):
+    def draw(self, screen, avatar=None):
         # 绘制角色方块
         if self.is_attacking and self.attack_frame % 4 < 2:
             # 攻击时闪烁效果
@@ -212,6 +212,25 @@ class Player:
             pygame.draw.rect(screen, (255, 200, 0, 128), 
                            (attack_rect['x'], attack_rect['y'], 
                             attack_rect['width'], attack_rect['height']), 3)
+
+        # 如果传入头像图像，绘制到角色头部上方（居中）
+        if avatar:
+            try:
+                aw = avatar.get_width()
+                ah = avatar.get_height()
+                ax = int(self.x + (self.width // 2) - aw // 2)
+                ay = int(self.y - ah + 8)  # place slightly overlapping the top of body
+                # clamp inside screen
+                if ax < 0:
+                    ax = 0
+                if ax + aw > WIDTH:
+                    ax = WIDTH - aw
+                if ay < 0:
+                    ay = 0
+                screen.blit(avatar, (ax, ay))
+            except Exception:
+                # if avatar surface problematic, ignore
+                pass
 
 class Bubble:
     def __init__(self, x, y, bubble_type='pow'):
@@ -537,9 +556,9 @@ def main():
             for bubble in bubbles:
                 bubble.draw(screen)
 
-            # 绘制玩家
-            player1.draw(screen)
-            player2.draw(screen)
+            # 绘制玩家（传入头像 surface，如果有）
+            player1.draw(screen, avatar=local_p1)
+            player2.draw(screen, avatar=local_p2)
 
             # 绘制UI
             draw_ui(screen, player1, player2, p1_avatar=local_p1, p2_avatar=local_p2)
