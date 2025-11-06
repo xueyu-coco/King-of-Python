@@ -11,7 +11,7 @@ pygame.init()
 # 游戏窗口设置
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("King of Python - The Great Keyboard")
+pygame.display.set_caption("King of Python")
 
 # 颜色定义
 WHITE = (255, 255, 255)
@@ -588,10 +588,8 @@ def main():
     while start:
         screen.fill(BG_COLOR)
         title = font_large.render('King of Python', True, BLACK)
-        subtitle = font_medium.render('The Great Keyboard', True, PURPLE)
         sub = font_small.render('Press C to capture faces, S to skip and start', True, BLACK)
-        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 100))
-        screen.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, HEIGHT//2 - 40))
+        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 80))
         screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT//2 + 20))
         pygame.display.flip()
         
