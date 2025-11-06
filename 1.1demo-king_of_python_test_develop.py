@@ -240,8 +240,20 @@ class Player:
         else:
             color = self.color
         
-        pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
-        pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+        # 如果提供了 avatar（合成的 frame + photo），则将其缩放到角色方块的大小并替代方块绘制
+        if avatar:
+            try:
+                sprite = pygame.transform.smoothscale(avatar, (self.width, self.height))
+                screen.blit(sprite, (int(self.x), int(self.y)))
+                # 绘制边框以保留原有样式
+                pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+            except Exception:
+                # 回退到原始方块绘制
+                pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
+                pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+        else:
+            pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
+            pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
         
         # 绘制眼睛
         eye_y = int(self.y + 15)
@@ -268,24 +280,7 @@ class Player:
                            (attack_rect['x'], attack_rect['y'], 
                             attack_rect['width'], attack_rect['height']), 3)
 
-        # 如果传入头像图像，绘制到角色头部上方（居中）
-        if avatar:
-            try:
-                aw = avatar.get_width()
-                ah = avatar.get_height()
-                ax = int(self.x + (self.width // 2) - aw // 2)
-                ay = int(self.y - ah + 8)  # place slightly overlapping the top of body
-                # clamp inside screen
-                if ax < 0:
-                    ax = 0
-                if ax + aw > WIDTH:
-                    ax = WIDTH - aw
-                if ay < 0:
-                    ay = 0
-                screen.blit(avatar, (ax, ay))
-            except Exception:
-                # if avatar surface problematic, ignore
-                pass
+        # 头像现在绘制为替代角色方块（已处理在上方）
 
 class Bubble:
     def __init__(self, x, y, bubble_type='pow'):
