@@ -72,6 +72,7 @@ class Player:
         
         # 战斗相关
         self.has_pow_bubble = False
+        self.has_delete_bubble = False
         self.attack_cooldown = 0
         self.is_attacking = False
         self.attack_frame = 0
@@ -137,12 +138,17 @@ class Player:
             self.on_ground = False
         
         # 攻击：只有拾取到 pow 泡泡后才能攻击（攻击会消耗 pow）
-        if keys[self.controls['attack']] and self.attack_cooldown <= 0 and self.has_pow_bubble:
+        if keys[self.controls['attack']] and self.attack_cooldown <= 0 and (self.has_pow_bubble or self.has_delete_bubble):
             self.is_attacking = True
             self.attack_cooldown = ATTACK_COOLDOWN
-            # powered attack
-            self.attack_power = 8
-            self.has_pow_bubble = False
+            # powered attack or delete attack
+            if self.has_pow_bubble:
+                self.attack_power = 8
+                self.has_pow_bubble = False
+            elif self.has_delete_bubble:
+                self.attack_power = 5  # delete attack has moderate damage
+                # delete effect will be applied on hit
+
         
         # 应用重力
         self.vel_y += GRAVITY
@@ -195,11 +201,16 @@ class Player:
             'height': attack_height
         }
     
-    def take_damage(self, damage, knockback_direction):
+    def take_damage(self, damage, knockback_direction, delete_power=False):
         """受到伤害"""
         self.hp -= damage
         if self.hp < 0:
             self.hp = 0
+        
+        # 如果是delete攻击，清除对方的技能
+        if delete_power:
+            self.has_pow_bubble = False
+            self.has_delete_bubble = False
         
         # 应用击退
         self.knockback_x = knockback_direction * 15
@@ -274,6 +285,12 @@ class Player:
             indicator_y = int(self.y - 10)
             pygame.draw.circle(screen, ORANGE, (indicator_x, indicator_y), 5)
         
+        # 如果有delete泡泡，显示指示器
+        if self.has_delete_bubble and not self.is_frozen:
+            indicator_x = int(self.x + self.width // 2)
+            indicator_y = int(self.y - 20) if self.has_pow_bubble else int(self.y - 10)
+            pygame.draw.circle(screen, RED, (indicator_x, indicator_y), 5)
+        
         # 绘制攻击判定区域（调试用）
         attack_rect = self.get_attack_rect()
         if attack_rect and not self.is_frozen:
@@ -293,8 +310,8 @@ class Bubble:
         # 根据类型设置颜色
         if self.type == 'pow':
             self.color = ORANGE
-        elif self.type == 'harm':
-            self.color = (220, 40, 40)  # 红色伤害泡泡
+        elif self.type == 'delete':
+            self.color = (220, 40, 40)  # 红色删除泡泡
         elif self.type == 'ctrlc':
             self.color = CYAN  # 青色陷阱泡泡
         else:
@@ -312,13 +329,13 @@ class Bubble:
         
         # 绘制类型标识
         if self.type == 'pow':
-            label = 'POW'
+            label = 'POW()'
             text_color = BLACK
             label_font = font_small
-        elif self.type == 'harm':
-            label = '!'
+        elif self.type == 'delete':
+            label = 'DELETE'
             text_color = WHITE
-            label_font = font_small
+            label_font = font_tiny
         elif self.type == 'ctrlc':
             label = 'Ctrl+C'
             text_color = BLACK
@@ -458,12 +475,12 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 绘制技能说明（屏幕底部）
     info_y = HEIGHT - 80
-    pow_info = font_tiny.render("POW: Attack Power", True, ORANGE)
-    harm_info = font_tiny.render("!: Instant Damage", True, RED)
+    pow_info = font_tiny.render("POW(): Attack Power", True, ORANGE)
+    delete_info = font_tiny.render("DELETE: Remove Enemy Skill", True, RED)
     ctrlc_info = font_tiny.render("Ctrl+C: Freeze 3s", True, CYAN)
     
     screen.blit(pow_info, (WIDTH//2 - 150, info_y))
-    screen.blit(harm_info, (WIDTH//2 - 150, info_y + 25))
+    screen.blit(delete_info, (WIDTH//2 - 150, info_y + 25))
     screen.blit(ctrlc_info, (WIDTH//2 - 150, info_y + 50))
 
 def draw_platform(screen, platform):
@@ -571,23 +588,31 @@ def main():
             if player1.is_attacking and player1.attack_frame == 5 and not player1.is_frozen:
                 if check_attack_hit(player1, player2):
                     knockback_dir = 1 if player1.facing_right else -1
-                    player2.take_damage(player1.attack_power, knockback_dir)
+                    has_delete = player1.has_delete_bubble
+                    player2.take_damage(player1.attack_power, knockback_dir, delete_power=has_delete)
+                    # consume delete bubble after use
+                    if has_delete:
+                        player1.has_delete_bubble = False
             
             if player2.is_attacking and player2.attack_frame == 5 and not player2.is_frozen:
                 if check_attack_hit(player2, player1):
                     knockback_dir = 1 if player2.facing_right else -1
-                    player1.take_damage(player2.attack_power, knockback_dir)
+                    has_delete = player2.has_delete_bubble
+                    player1.take_damage(player2.attack_power, knockback_dir, delete_power=has_delete)
+                    # consume delete bubble after use
+                    if has_delete:
+                        player2.has_delete_bubble = False
             
             # 生成泡泡
             bubble_timer += 1
             if bubble_timer >= BUBBLE_SPAWN_TIME:
                 x = random.randint(100, WIDTH - 100)
-                # 泡泡生成概率：pow 50%, harm 25%, ctrlc 25%
+                # 泡泡生成概率：pow 50%, delete 25%, ctrlc 25%
                 rand = random.random()
                 if rand < 0.5:
                     btype = 'pow'
                 elif rand < 0.75:
-                    btype = 'harm'
+                    btype = 'delete'
                 else:
                     btype = 'ctrlc'
                 bubbles.append(Bubble(x, -50, btype))
@@ -604,9 +629,8 @@ def main():
                     if bubble.check_collision(player1):
                         if bubble.type == 'pow' and not player1.has_pow_bubble:
                             player1.has_pow_bubble = True
-                        elif bubble.type == 'harm':
-                            # immediate damage on pickup
-                            player1.take_damage(8, -1 if player1.facing_right else 1)
+                        elif bubble.type == 'delete' and not player1.has_delete_bubble:
+                            player1.has_delete_bubble = True
                         elif bubble.type == 'ctrlc':
                             # 冻结玩家
                             player1.freeze()
@@ -617,8 +641,8 @@ def main():
                     if bubble.check_collision(player2):
                         if bubble.type == 'pow' and not player2.has_pow_bubble:
                             player2.has_pow_bubble = True
-                        elif bubble.type == 'harm':
-                            player2.take_damage(8, -1 if player2.facing_right else 1)
+                        elif bubble.type == 'delete' and not player2.has_delete_bubble:
+                            player2.has_delete_bubble = True
                         elif bubble.type == 'ctrlc':
                             # 冻结玩家
                             player2.freeze()
