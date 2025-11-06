@@ -40,6 +40,61 @@ font_small = pygame.font.Font(None, 32)
 p1_avatar_surf = None
 p2_avatar_surf = None
 
+# optional decorative frames to place around player heads (user-supplied images)
+FRAME1_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'frame1.png')
+FRAME2_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'frame2.png')
+try:
+    frame1_surf = pygame.image.load(FRAME1_PATH).convert_alpha()
+except Exception:
+    frame1_surf = None
+try:
+    frame2_surf = pygame.image.load(FRAME2_PATH).convert_alpha()
+except Exception:
+    frame2_surf = None
+
+
+def compose_head(frame_surf, photo_surf, inner_padding=24):
+    """Compose a head sprite by placing the circular photo into the frame's hole.
+
+    frame_surf: pygame.Surface (with alpha), photo_surf: pygame.Surface
+    Returns a new Surface or None on failure.
+    inner_padding: pixels to leave around the inner circular hole.
+    """
+    if not frame_surf or not photo_surf:
+        return None
+    try:
+        fw, fh = frame_surf.get_size()
+        # We'll assume inner circle diameter is min(frame size) - inner_padding*2
+        diameter = max(8, min(fw, fh) - inner_padding * 2)
+        # scale photo to diameter
+        photo_scaled = pygame.transform.smoothscale(photo_surf, (diameter, diameter))
+
+        # create surface to hold composition
+        comp = pygame.Surface((fw, fh), pygame.SRCALPHA)
+
+        # create masked photo surface same size as comp
+        photo_layer = pygame.Surface((fw, fh), pygame.SRCALPHA)
+        # center position
+        px = (fw - diameter) // 2
+        py = (fh - diameter) // 2
+        photo_layer.blit(photo_scaled, (px, py))
+
+        # mask with a filled circle to keep only circular area
+        mask = pygame.Surface((fw, fh), pygame.SRCALPHA)
+        mask.fill((0, 0, 0, 0))
+        center = (fw // 2, fh // 2)
+        radius = diameter // 2
+        pygame.draw.circle(mask, (255, 255, 255, 255), center, radius)
+        # apply mask by multiplying alpha
+        photo_layer.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+        # blit masked photo then the frame on top
+        comp.blit(photo_layer, (0, 0))
+        comp.blit(frame_surf, (0, 0))
+        return comp
+    except Exception:
+        return None
+
 # Try to import face capture helper; if not available, we'll allow skipping
 try:
     # ensure repo root is on sys.path when running from repo root
@@ -409,6 +464,9 @@ def main():
     start = True
     local_p1 = None
     local_p2 = None
+    # composed head sprites (avatar inside decorative frames) - used for drawing on players
+    local_p1_head = None
+    local_p2_head = None
     while start:
         screen.fill(BG_COLOR)
         title = font_large.render('King of Python', True, BLACK)
@@ -428,6 +486,14 @@ def main():
                     p2 = capture_and_make_sprite('Face2')
                     local_p1 = load_avatar_surface(p1)
                     local_p2 = load_avatar_surface(p2)
+                    # if decorative frames are present, compose heads
+                    local_p1_head = compose_head(frame1_surf, local_p1) if frame1_surf else None
+                    local_p2_head = compose_head(frame2_surf, local_p2) if frame2_surf else None
+                    # fall back to raw avatar surfaces if composed not available
+                    if not local_p1_head:
+                        local_p1_head = local_p1
+                    if not local_p2_head:
+                        local_p2_head = local_p2
                     start = False
                 if ev.key == pygame.K_s:
                     start = False
@@ -556,9 +622,12 @@ def main():
             for bubble in bubbles:
                 bubble.draw(screen)
 
-            # 绘制玩家（传入头像 surface，如果有）
-            player1.draw(screen, avatar=local_p1)
-            player2.draw(screen, avatar=local_p2)
+                # 绘制玩家（传入头像/合成头像 surface，如果有）
+                # prefer composed head sprites if available
+                draw_p1_avatar = local_p1_head if 'local_p1_head' in locals() and local_p1_head else local_p1
+                draw_p2_avatar = local_p2_head if 'local_p2_head' in locals() and local_p2_head else local_p2
+                player1.draw(screen, avatar=draw_p1_avatar)
+                player2.draw(screen, avatar=draw_p2_avatar)
 
             # 绘制UI
             draw_ui(screen, player1, player2, p1_avatar=local_p1, p2_avatar=local_p2)
