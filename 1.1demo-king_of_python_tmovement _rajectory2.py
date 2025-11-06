@@ -1,0 +1,1455 @@
+import pygame
+import sys
+import os
+import time
+import random
+import math
+
+
+# 初始化Pygame
+pygame.init()
+
+
+# 游戏窗口设置
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("King of Python - Demo Test 1.1 (develop copy)")
+
+
+# 颜色定义
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 60, 60)
+BLUE = (60, 120, 255)
+ORANGE = (255, 150, 50)
+GREEN = (80, 200, 80)
+GRAY = (150, 150, 150)
+BG_COLOR = (240, 240, 250)
+
+
+# 游戏设置
+FPS = 60
+GRAVITY = 0.8
+JUMP_POWER = -15
+MOVE_SPEED = 5
+ATTACK_COOLDOWN = 30  # 攻击冷却时间（帧）
+BUBBLE_SPAWN_TIME = 180  # 泡泡生成间隔（帧）
+
+
+# 字体
+font_large = pygame.font.Font(None, 72)
+font_medium = pygame.font.Font(None, 48)
+font_small = pygame.font.Font(None, 32)
+
+# --- VFX / pow 参数（可调）
+POW_PUSH_PROB = 0.7  # 采到 pow 后是 push 的概率，剩下为 freeze
+
+# push 粒子
+PUSH_PARTICLE_COUNT = 16
+PUSH_PARTICLE_SPEED_MIN = 3.0
+PUSH_PARTICLE_SPEED_MAX = 6.0
+PUSH_PARTICLE_LIFE = 30
+PUSH_PARTICLE_COLOR = (255, 180, 80)
+PUSH_PARTICLE_SIZE = 4
+
+# freeze 粒子
+FREEZE_PARTICLE_COUNT = 18
+FREEZE_PARTICLE_SPEED_MIN = 1.0
+FREEZE_PARTICLE_SPEED_MAX = 4.0
+FREEZE_PARTICLE_LIFE = 40
+FREEZE_PARTICLE_COLOR = (160, 210, 255)
+FREEZE_PARTICLE_SIZE = 3
+
+# 效果数值（可调）
+FREEZE_DURATION_FRAMES = 90
+PUSH_KNOCKBACK = 25
+FREEZE_KNOCKBACK = 6
+POWER_DAMAGE = 6
+NORMAL_DAMAGE = 3
+
+# 命中特效调整
+HIT_PARTICLE_COUNT = 16
+HIT_PARTICLE_LIFE = 28
+HIT_PARTICLE_SIZE = 3
+# 命中短闪（大而短的光斑）——加大以增强能见度
+HIT_FLASH_LIFE = 14
+HIT_FLASH_SIZE = 24
+HIT_FLASH_COLOR = (255, 240, 180)
+
+# 玩家被击中闪烁时长（帧）
+PLAYER_HURT_FLASH = 18
+
+# 拖尾参数
+TRAIL_LIFE = 20
+TRAIL_SIZE = 6
+TRAIL_SPAWN_SPEED_THRESHOLD = 0.5  # 当速度超过此阈值时生成拖尾
+
+# 重影（afterimage）参数（缓存/预渲染友好）
+AFTERIMAGE_LIFE = 24        # 帧数，重影持续时长
+AFTERIMAGE_INTERVAL = 4     # 帧间隔：每隔多少帧生成一个重影
+AFTERIMAGE_ALPHA = 160      # 初始 alpha 值（0-255）
+
+# 池化/缓存参数
+MAX_AFTERIMAGES = 12
+AFTERIMAGE_CACHE_SCALES = [1.0, 1.18]  # 预渲染的缩放级别（normal, glow-scale）
+AFTERIMAGE_GLOW_SCALE = 1.28
+AFTERIMAGE_GLOW_ALPHA = 80
+
+
+# Avatar surfaces (loaded after optional face-capture)
+p1_avatar_surf = None
+p2_avatar_surf = None
+
+
+# Try to import face capture helper; if not available, we'll allow skipping
+try:
+    # ensure repo root is on sys.path when running from repo root
+    HERE = os.path.dirname(__file__)
+    REPO_ROOT = os.path.abspath(HERE)
+    if REPO_ROOT not in sys.path:
+        sys.path.insert(0, REPO_ROOT)
+    from King_Monica.face_login_demo import capture_and_make_sprite
+except Exception:
+    capture_and_make_sprite = None
+
+
+class Player:
+    def __init__(self, x, y, color, controls, facing_right=True):
+        self.x = x
+        self.y = y
+        self.width = 40
+        self.height = 60
+        self.color = color
+        self.vel_x = 0
+        self.vel_y = 0
+        self.hp = 100
+        self.max_hp = 100
+        self.on_ground = False
+        self.facing_right = facing_right
+        self.controls = controls
+        
+        # 战斗相关
+        self.has_pow_bubble = False
+        self.attack_cooldown = 0
+        self.is_attacking = False
+        self.attack_frame = 0
+        self.attack_power = 3
+        self.knockback_x = 0
+        # 被击中闪烁计时器（>0 时闪烁）
+        self.hurt_timer = 0
+        
+    def update(self, keys, platform, particles=None):
+        # 更新攻击状态
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+        
+        if self.is_attacking:
+            self.attack_frame += 1
+            if self.attack_frame > 15:  # 攻击动画持续15帧
+                self.is_attacking = False
+                self.attack_frame = 0
+        
+        # 处理被击中闪烁计时器
+        if self.hurt_timer > 0:
+            self.hurt_timer -= 1
+
+        # 处理击退
+        if abs(self.knockback_x) > 0.1:
+            self.x += self.knockback_x
+            self.knockback_x *= 0.8  # 击退衰减
+        else:
+            self.knockback_x = 0
+        
+        # 控制移动
+        if keys[self.controls['left']] and not self.is_attacking:
+            self.vel_x = -MOVE_SPEED
+            self.facing_right = False
+        elif keys[self.controls['right']] and not self.is_attacking:
+            self.vel_x = MOVE_SPEED
+            self.facing_right = True
+        else:
+            self.vel_x = 0
+        
+        # 跳跃
+        if keys[self.controls['jump']] and self.on_ground:
+            self.vel_y = JUMP_POWER
+            self.on_ground = False
+        
+        # 攻击：按攻击键即触发攻击；若持有 pow 则为强化攻击并消耗 pow
+        if keys[self.controls['attack']] and self.attack_cooldown <= 0:
+            self.is_attacking = True
+            self.attack_cooldown = ATTACK_COOLDOWN
+            if self.has_pow_bubble:
+                # powered attack
+                self.attack_power = 8
+                # 消耗 pow，具体 pow_type 在命中判定时使用并清除
+                self.has_pow_bubble = False
+            else:
+                self.attack_power = 3
+        
+        # 应用重力
+        self.vel_y += GRAVITY
+        
+        # 更新位置
+        self.x += self.vel_x
+        self.y += self.vel_y
+
+        # 拖尾：当玩家在移动（速度超过阈值）时生成与玩家颜色相同的拖尾粒子
+        try:
+            moving = abs(self.vel_x) > TRAIL_SPAWN_SPEED_THRESHOLD or abs(self.vel_y) > TRAIL_SPAWN_SPEED_THRESHOLD
+        except Exception:
+            moving = False
+        if particles is not None and moving:
+            cx = self.x + self.width / 2
+            cy = self.y + self.height / 2
+            # 拖尾速度与玩家速度方向相反并带有少量抖动
+            vx = -self.vel_x * 0.2 + random.uniform(-0.2, 0.2)
+            vy = -self.vel_y * 0.2 + random.uniform(-0.2, 0.2)
+            particles.append(Particle(cx, cy, vx, vy, life=TRAIL_LIFE, color=self.color, size=TRAIL_SIZE))
+        
+        # 平台碰撞检测
+        self.on_ground = False
+        if self.check_platform_collision(platform):
+            if self.vel_y > 0:  # 向下移动
+                self.y = platform['y'] - self.height
+                self.vel_y = 0
+                self.on_ground = True
+        
+        # 边界限制
+        if self.x < 0:
+            self.x = 0
+        if self.x > WIDTH - self.width:
+            self.x = WIDTH - self.width
+        
+        # 掉出场外判定
+        if self.y > HEIGHT:
+            self.hp = 0
+    
+    def check_platform_collision(self, platform):
+        return (self.x < platform['x'] + platform['width'] and
+                self.x + self.width > platform['x'] and
+                self.y < platform['y'] + platform['height'] and
+                self.y + self.height > platform['y'])
+    
+    def get_attack_rect(self):
+        """获取攻击判定区域"""
+        if not self.is_attacking:
+            return None
+        
+        attack_width = 80
+        attack_height = 60
+        if self.facing_right:
+            attack_x = self.x + self.width
+        else:
+            attack_x = self.x - attack_width
+        attack_y = self.y
+        
+        return {
+            'x': attack_x,
+            'y': attack_y,
+            'width': attack_width,
+            'height': attack_height
+        }
+    
+    def take_damage(self, damage, knockback_direction):
+        """受到伤害"""
+        self.hp -= damage
+        if self.hp < 0:
+            self.hp = 0
+        
+        # 应用击退
+        self.knockback_x = knockback_direction * 15
+        # 触发被击中闪烁
+        self.hurt_timer = PLAYER_HURT_FLASH
+    
+    def draw(self, screen):
+        # 绘制角色方块
+        # 如果正在被击中，优先显示被击中闪烁（白色快速闪烁）以提示受伤
+        if getattr(self, 'hurt_timer', 0) > 0:
+            # 快速闪烁：每 3 帧切换一次（视觉补充），但我们也会添加半透明覆盖以增强可见性
+            if (self.hurt_timer // 3) % 2 == 0:
+                color = (255, 255, 255)
+            else:
+                color = self.color
+        elif self.is_attacking and self.attack_frame % 4 < 2:
+            # 攻击时闪烁效果（次级显示）
+            color = (min(255, self.color[0] + 50), 
+                    min(255, self.color[1] + 50), 
+                    min(255, self.color[2] + 50))
+        else:
+            color = self.color
+
+        # 基础主体
+        pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
+
+        # 半透明受击覆盖（覆盖在主体之上，但在描边/眼睛之前）
+        if getattr(self, 'hurt_timer', 0) > 0:
+            # alpha 根据剩余 hurt_timer 线性衰减，以帧为单位
+            alpha = int(180 * (self.hurt_timer / max(1, PLAYER_HURT_FLASH)))
+            # 使用淡红色覆盖以表示受击；你可以改为攻击者颜色的亮变体
+            overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            overlay.fill((255, 100, 100, alpha))
+            screen.blit(overlay, (int(self.x), int(self.y)))
+
+        # 描边
+        pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+
+        # 绘制眼睛
+        eye_y = int(self.y + 15)
+        if self.facing_right:
+            left_eye = (int(self.x + 12), eye_y)
+            right_eye = (int(self.x + 28), eye_y)
+        else:
+            left_eye = (int(self.x + 12), eye_y)
+            right_eye = (int(self.x + 28), eye_y)
+
+        pygame.draw.circle(screen, BLACK, left_eye, 4)
+        pygame.draw.circle(screen, BLACK, right_eye, 4)
+        
+        # 如果有pow泡泡，显示指示器
+        if self.has_pow_bubble:
+            indicator_x = int(self.x + self.width // 2)
+            indicator_y = int(self.y - 10)
+            pygame.draw.circle(screen, ORANGE, (indicator_x, indicator_y), 5)
+        
+        # （移除原有攻击判定黄色框，改为粒子/效果视觉）
+
+
+class Bubble:
+    def __init__(self, x, y, bubble_type='pow'):
+        self.x = x
+        self.y = y
+        self.size = 25
+        self.vel_y = 2
+        self.type = bubble_type
+        self.active = True
+        # type-specific color
+        if self.type == 'pow':
+            self.color = ORANGE
+        elif self.type == 'harm':
+            self.color = (220, 40, 40)  # red harmful bubble
+        else:
+            self.color = ORANGE
+        
+    def update(self):
+        self.y += self.vel_y
+        if self.y > HEIGHT:
+            self.active = False
+    
+    def draw(self, screen):
+        # 绘制泡泡
+        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.size, 2)
+        
+        # 绘制类型标识：pow 显示 POW，harm 显示惊叹号
+        if self.type == 'pow':
+            label = 'POW'
+            text_color = BLACK
+        elif self.type == 'harm':
+            label = '!'
+            text_color = WHITE
+        else:
+            label = ''
+            text_color = BLACK
+
+
+        if label:
+            text = font_small.render(label, True, text_color)
+            text_rect = text.get_rect(center=(int(self.x), int(self.y)))
+            screen.blit(text, text_rect)
+    
+    def check_collision(self, player):
+        """检测与玩家的碰撞"""
+        dist = math.sqrt((self.x - (player.x + player.width//2))**2 + 
+                        (self.y - (player.y + player.height//2))**2)
+        return dist < self.size + player.width//2
+
+
+class Particle:
+    """轻量粒子用于 VFX（推开和冰冻）"""
+    def __init__(self, x, y, vx, vy, life, color, size=4):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.life = life
+        self.color = color
+        self.size = size
+
+    def update(self):
+        self.life -= 1
+        self.x += self.vx
+        self.y += self.vy
+        # 简单空气阻力
+        self.vx *= 0.95
+        self.vy *= 0.98
+
+    def draw(self, surf):
+        if self.life > 0:
+            alpha = max(20, min(255, int(255 * (self.life / 30))))
+            s = pygame.Surface((self.size*2, self.size*2), pygame.SRCALPHA)
+            s.fill((0,0,0,0))
+            pygame.draw.circle(s, (*self.color, alpha), (self.size, self.size), self.size)
+            surf.blit(s, (int(self.x - self.size), int(self.y - self.size)))
+
+
+def spawn_push_particles(particles, cx, cy, direction, count=12):
+    """生成向外喷射的橙色粒子用于 push 效果"""
+    for i in range(count if count is not None else PUSH_PARTICLE_COUNT):
+        ang = random.uniform(-0.6, 0.6) + (0 if direction > 0 else math.pi)
+        speed = random.uniform(PUSH_PARTICLE_SPEED_MIN, PUSH_PARTICLE_SPEED_MAX)
+        vx = math.cos(ang) * speed
+        vy = math.sin(ang) * speed * 0.6
+        particles.append(Particle(cx, cy, vx, vy - 1.5, life=PUSH_PARTICLE_LIFE, color=PUSH_PARTICLE_COLOR, size=PUSH_PARTICLE_SIZE))
+
+
+def spawn_freeze_particles(particles, cx, cy, count=14):
+    """生成冰蓝色碎片用于 freeze 效果"""
+    for i in range(count if count is not None else FREEZE_PARTICLE_COUNT):
+        ang = random.uniform(0, math.tau)
+        speed = random.uniform(FREEZE_PARTICLE_SPEED_MIN, FREEZE_PARTICLE_SPEED_MAX)
+        vx = math.cos(ang) * speed
+        vy = math.sin(ang) * speed
+        particles.append(Particle(cx, cy, vx, vy - 0.5, life=FREEZE_PARTICLE_LIFE, color=FREEZE_PARTICLE_COLOR, size=FREEZE_PARTICLE_SIZE))
+
+
+def spawn_hit_particles(particles, cx, cy, count=8, color=None):
+    """命中时的通用撞击粒子（支持传入颜色以实现彩色粒子）。
+    修复：原实现只在循环外追加一次粒子，现为每次循环追加小火花，并保留大闪光。
+    color 参数可以传入 RGB 三元组；若为 None 则使用默认黄色系。
+    """
+    use_count = count if count is not None else HIT_PARTICLE_COUNT
+    for i in range(use_count):
+        ang = random.uniform(0, math.tau)
+        speed = random.uniform(0.8, 3.2)
+        vx = math.cos(ang) * speed
+        vy = math.sin(ang) * speed
+        # 颜色选择：若调用方提供 color，则在其范围上做微调；否则使用黄色系
+        if color is not None:
+            r, g, b = color
+            mult = random.uniform(0.7, 1.15)
+            col = (min(255, int(r * mult)), min(255, int(g * mult)), min(255, int(b * mult)))
+        else:
+            col = (255, 220, 100) if random.random() < 0.85 else (255, 245, 170)
+        size = random.randint(max(1, HIT_PARTICLE_SIZE-1), HIT_PARTICLE_SIZE+1)
+        particles.append(Particle(cx + random.uniform(-6,6), cy + random.uniform(-6,6), vx, vy - 0.5, life=HIT_PARTICLE_LIFE, color=col, size=size))
+
+    # 添加一个短时的大闪光以增强冲击感（更明显），颜色使用 HIT_FLASH_COLOR
+    particles.append(Particle(cx, cy, 0, 0, life=HIT_FLASH_LIFE, color=HIT_FLASH_COLOR, size=HIT_FLASH_SIZE))
+    # 额外添加一个稍小的明亮点以提高被注意到的几率
+    particles.append(Particle(cx + random.uniform(-8,8), cy + random.uniform(-8,8), 0, 0, life=max(6, HIT_FLASH_LIFE//2), color=(255,255,230), size=max(6, HIT_FLASH_SIZE//3)))
+
+
+def check_player_collision(player1, player2):
+    """检测两个玩家之间的碰撞"""
+    if (player1.x < player2.x + player2.width and
+        player1.x + player1.width > player2.x and
+        player1.y < player2.y + player2.height and
+        player1.y + player1.height > player2.y):
+        
+        # 产生轻微击退
+        if player1.x < player2.x:
+            player1.x -= 2
+            player2.x += 2
+        else:
+            player1.x += 2
+            player2.x -= 2
+        
+        return True
+    return False
+
+
+def check_attack_hit(attacker, defender):
+    """检测攻击是否命中"""
+    attack_rect = attacker.get_attack_rect()
+    if not attack_rect:
+        return False
+    
+    # 检测defender是否在攻击范围内
+    if (defender.x < attack_rect['x'] + attack_rect['width'] and
+        defender.x + defender.width > attack_rect['x'] and
+        defender.y < attack_rect['y'] + attack_rect['height'] and
+        defender.y + defender.height > attack_rect['y']):
+        return True
+    return False
+
+
+def load_avatar_surface(path, max_display=80):
+    try:
+        surf = pygame.image.load(path).convert_alpha()
+    except Exception:
+        return None
+    w, h = surf.get_size()
+    if max(w, h) > max_display:
+        scale = max_display / max(w, h)
+        surf = pygame.transform.smoothscale(surf, (int(w * scale), int(h * scale)))
+    return surf
+
+
+
+
+def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
+    """绘制UI（血条等）"""
+    # 血条设置 (moved down a bit so UI isn't flush to the top)
+    hp_bar_width = 300
+    hp_bar_height = 25
+    hp_bar_y = 60
+    
+    # 玩家1血条（左侧）
+    p1_x = 50
+    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
+    pygame.draw.rect(screen, player1.color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
+    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    
+    # 玩家1名称 - centered inside HP bar and shrink if too wide
+    name1 = "PLAYER 1"
+    p1_text = font_small.render(name1, True, player1.color)
+    if p1_text.get_width() > hp_bar_width:
+        small_font = pygame.font.Font(None, 20)
+        p1_text = small_font.render(name1, True, player1.color)
+    p1_text_rect = p1_text.get_rect(center=(p1_x + hp_bar_width // 2, hp_bar_y - 12))
+    screen.blit(p1_text, p1_text_rect)
+    # optional avatar
+    if p1_avatar:
+        aw = p1_avatar.get_width()
+        ah = p1_avatar.get_height()
+        # place to the left of the left HP bar
+        ax = p1_x - aw - 8
+        ay = hp_bar_y + (hp_bar_height // 2) - (ah // 2)
+        # clamp so avatar doesn't go off-screen
+        if ax < 8:
+            ax = 8
+        if ay < 8:
+            ay = 8
+        screen.blit(p1_avatar, (ax, ay))
+    
+    # 玩家2血条（右侧）
+    p2_x = WIDTH - 50 - hp_bar_width
+    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
+    pygame.draw.rect(screen, player2.color, (p2_x, hp_bar_y, hp2_width, hp_bar_height))
+    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    
+    # 玩家2名称 - centered inside HP bar and shrink if too wide
+    name2 = "PLAYER 2"
+    p2_text = font_small.render(name2, True, player2.color)
+    if p2_text.get_width() > hp_bar_width:
+        small_font = pygame.font.Font(None, 20)
+        p2_text = small_font.render(name2, True, player2.color)
+    p2_text_rect = p2_text.get_rect(center=(p2_x + hp_bar_width // 2, hp_bar_y - 12))
+    screen.blit(p2_text, p2_text_rect)
+    # optional avatar
+    if p2_avatar:
+        aw = p2_avatar.get_width()
+        ah = p2_avatar.get_height()
+        # place to the right of the right HP bar
+        ax = p2_x + hp_bar_width + 8
+        ay = hp_bar_y + (hp_bar_height // 2) - (ah // 2)
+        # clamp so avatar doesn't go off-screen
+        if ax + aw > WIDTH - 8:
+            ax = WIDTH - aw - 8
+        if ay < 8:
+            ay = 8
+        screen.blit(p2_avatar, (ax, ay))
+
+
+def draw_platform(screen, platform):
+    """绘制平台"""
+    # 绘制阴影
+    pygame.draw.rect(screen, (100, 100, 100), 
+                    (platform['x'] + 3, platform['y'] + 3, 
+                     platform['width'], platform['height']))
+    # 绘制平台
+    pygame.draw.rect(screen, GREEN, 
+                    (platform['x'], platform['y'], 
+                     platform['width'], platform['height']))
+    pygame.draw.rect(screen, (60, 160, 60), 
+                    (platform['x'], platform['y'], 
+                     platform['width'], platform['height']), 3)
+
+
+def main():
+    clock = pygame.time.Clock()
+    # start menu: press C to capture faces (if helper available) or S to skip
+    start = True
+    local_p1 = None
+    local_p2 = None
+    while start:
+        screen.fill(BG_COLOR)
+        title = font_large.render('King of Python', True, BLACK)
+        sub = font_small.render('Press C to capture faces, S to skip and start', True, BLACK)
+        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 80))
+        screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT//2 + 20))
+        pygame.display.flip()
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if ev.type == pygame.KEYDOWN:
+                if ev.key == pygame.K_c and capture_and_make_sprite is not None:
+                    # run capture flow (this will open webcam windows)
+                    p1 = capture_and_make_sprite('Face1')
+                    time.sleep(1.0)
+                    p2 = capture_and_make_sprite('Face2')
+                    local_p1 = load_avatar_surface(p1)
+                    local_p2 = load_avatar_surface(p2)
+                    start = False
+                if ev.key == pygame.K_s:
+                    start = False
+                pass
+    
+    # 创建平台
+    # make the platform span the screen area between left/right HP bars (p1_x=50 margin)
+    left_margin = 50
+    right_margin = 50
+    platform = {
+        'x': left_margin,
+        'y': HEIGHT - 150,
+        'width': WIDTH - left_margin - right_margin,
+        'height': 20
+    }
+    
+    # 创建玩家
+    player1_controls = {
+        'left': pygame.K_a,
+        'right': pygame.K_d,
+        'jump': pygame.K_w,
+        'attack': pygame.K_f
+    }
+    player2_controls = {
+        'left': pygame.K_LEFT,
+        'right': pygame.K_RIGHT,
+        'jump': pygame.K_UP,
+        'attack': pygame.K_l
+    }
+    
+    player1 = Player(250, 200, BLUE, player1_controls, facing_right=True)
+    player2 = Player(500, 200, RED, player2_controls, facing_right=False)
+    
+    bubbles = []
+    particles = []
+    # afterimage 池与缓存
+    afterimages = []
+    afterimage_cache = {}  # key: id(surface) -> {'scaled': {scale: surface}, 'glow': surface}
+    bubble_timer = 0
+    frame_count = 0
+    
+    running = True
+    game_over = False
+    winner = None
+    
+    while running:
+        clock.tick(FPS)
+        frame_count += 1
+        
+        # 事件处理
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                if game_over and event.key == pygame.K_SPACE:
+                    return  # 重新开始
+                # (已移除调试按键1/2；攻击及特效由 F/L 键触发)
+        
+        if not game_over:
+            keys = pygame.key.get_pressed()
+            
+            # 更新玩家（传入 particles 用于生成拖尾和其它特效）
+            player1.update(keys, platform, particles)
+            player2.update(keys, platform, particles)
+
+            # 生成 afterimage（快照预渲染并缓存变体）
+            for pl in (player1, player2):
+                try:
+                    moving = abs(pl.vel_x) > TRAIL_SPAWN_SPEED_THRESHOLD or abs(pl.vel_y) > TRAIL_SPAWN_SPEED_THRESHOLD
+                except Exception:
+                    moving = False
+                if not moving:
+                    continue
+
+                if (frame_count % AFTERIMAGE_INTERVAL) != 0:
+                    continue
+
+                snap = pl.render_surface() if hasattr(pl, 'render_surface') else None
+                if snap is None:
+                    continue
+
+                key = id(snap)
+                # 预渲染并缓存缩放与 glow 变体（只做一次）
+                if key not in afterimage_cache:
+                    variants = {'scaled': {}, 'glow': None}
+                    w, h = snap.get_size()
+                    for s in AFTERIMAGE_CACHE_SCALES:
+                        if s == 1.0:
+                            variants['scaled'][s] = snap
+                        else:
+                            sw = max(1, int(w * s))
+                            sh = max(1, int(h * s))
+                            variants['scaled'][s] = pygame.transform.smoothscale(snap, (sw, sh))
+                    # glow 版本
+                    gw = max(1, int(w * AFTERIMAGE_GLOW_SCALE))
+                    gh = max(1, int(h * AFTERIMAGE_GLOW_SCALE))
+                    glow = pygame.transform.smoothscale(snap, (gw, gh))
+                    glow.set_alpha(AFTERIMAGE_GLOW_ALPHA)
+                    variants['glow'] = glow
+                    afterimage_cache[key] = variants
+
+                # append afterimage entry (记录当时速度以便后续绘制时依据速度缩放); cap total count
+                spd = math.hypot(getattr(pl, 'vel_x', 0), getattr(pl, 'vel_y', 0))
+                afterimages.append({'surf': snap, 'x': int(pl.x), 'y': int(pl.y), 'life': AFTERIMAGE_LIFE, 'key': key, 'speed': spd})
+                if len(afterimages) > MAX_AFTERIMAGES:
+                    afterimages.pop(0)
+            
+            # 检测玩家之间的碰撞
+            check_player_collision(player1, player2)
+            
+            # 检测攻击命中
+            if player1.is_attacking and player1.attack_frame == 5:  # 攻击生效帧
+                if check_attack_hit(player1, player2):
+                    knockback_dir = 1 if player1.facing_right else -1
+                    # 命中总是产生小撞击粒子
+                    spawn_hit_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2, color=player1.color)
+                    # 根据 pow_type 应用不同效果（若存在）
+                    if getattr(player1, 'pow_type', None) == 'freeze':
+                        player2.take_damage(POWER_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * FREEZE_KNOCKBACK
+                        player2.frozen_timer = FREEZE_DURATION_FRAMES
+                        spawn_freeze_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2, count=FREEZE_PARTICLE_COUNT)
+                    elif getattr(player1, 'pow_type', None) == 'push':
+                        player2.take_damage(POWER_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * PUSH_KNOCKBACK
+                        spawn_push_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2, direction=knockback_dir, count=PUSH_PARTICLE_COUNT)
+                    else:
+                        # 普通攻击
+                        player2.take_damage(NORMAL_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * 15
+                    player1.pow_type = None
+
+            if player2.is_attacking and player2.attack_frame == 5:
+                if check_attack_hit(player2, player1):
+                    knockback_dir = 1 if player2.facing_right else -1
+                    spawn_hit_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2, color=player2.color)
+                    if getattr(player2, 'pow_type', None) == 'freeze':
+                        player1.take_damage(POWER_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * FREEZE_KNOCKBACK
+                        player1.frozen_timer = FREEZE_DURATION_FRAMES
+                        spawn_freeze_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2, count=FREEZE_PARTICLE_COUNT)
+                    elif getattr(player2, 'pow_type', None) == 'push':
+                        player1.take_damage(POWER_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * PUSH_KNOCKBACK
+                        spawn_push_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2, direction=knockback_dir, count=PUSH_PARTICLE_COUNT)
+                    else:
+                        player1.take_damage(NORMAL_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * 15
+                    player2.pow_type = None
+            
+            # 生成泡泡
+            bubble_timer += 1
+            if bubble_timer >= BUBBLE_SPAWN_TIME:
+                x = random.randint(100, WIDTH - 100)
+                # spawn mostly pow bubbles but sometimes harmful red bubbles
+                btype = 'pow' if random.random() < 0.75 else 'harm'
+                bubbles.append(Bubble(x, -50, btype))
+                bubble_timer = 0
+            
+            # 更新泡泡
+            for bubble in bubbles[:]:
+                bubble.update()
+                if not bubble.active:
+                    bubbles.remove(bubble)
+                else:
+                    # 检测玩家拾取泡泡
+                    # player1 picks up
+                    if bubble.check_collision(player1):
+                        if bubble.type == 'pow' and not player1.has_pow_bubble:
+                            player1.has_pow_bubble = True
+                        elif bubble.type == 'harm':
+                            # immediate damage on pickup
+                            player1.take_damage(8, -1 if player1.facing_right else 1)
+                        bubbles.remove(bubble)
+                        continue
+
+
+                    # player2 picks up
+                    if bubble.check_collision(player2):
+                        if bubble.type == 'pow' and not player2.has_pow_bubble:
+                            player2.has_pow_bubble = True
+                        elif bubble.type == 'harm':
+                            player2.take_damage(8, -1 if player2.facing_right else 1)
+                        bubbles.remove(bubble)
+            
+            # 更新粒子特效
+                # 更新粒子特效（第二份脚本）
+                for p in particles[:]:
+                    p.update()
+                    if p.life <= 0:
+                        particles.remove(p)
+            for p in particles[:]:
+                p.update()
+                if p.life <= 0:
+                    particles.remove(p)
+            # 检查游戏结束条件
+            if player1.hp <= 0:
+                game_over = True
+                winner = "PLAYER 2"
+            elif player2.hp <= 0:
+                game_over = True
+                winner = "PLAYER 1"
+        
+        # 绘制
+        screen.fill(BG_COLOR)
+        
+        # 绘制平台
+        draw_platform(screen, platform)
+        
+        # 绘制泡泡
+        for bubble in bubbles:
+            bubble.draw(screen)
+        # 绘制并更新 afterimages（使用缓存的变体并应用速度缩放与非线性 alpha）
+        for a in afterimages[:]:
+            life = a.get('life', 0)
+            if life <= 0:
+                afterimages.remove(a)
+                continue
+
+            life_ratio = life / max(1, AFTERIMAGE_LIFE)
+            # 非线性 alpha（更平滑/柔和）
+            ALPHA_POW = 0.7
+            alpha = int(AFTERIMAGE_ALPHA * (life_ratio ** ALPHA_POW))
+
+            key = a.get('key')
+            cached = afterimage_cache.get(key)
+            base_surf = a['surf']
+            w, h = base_surf.get_size()
+
+            # scale 基于当时速度和剩余 life（快速移动时初始更大，随后回缩）
+            spd = a.get('speed', 0)
+            scale = 1.0 + min(0.6, spd * 0.06) * (1.0 - life_ratio)
+
+            if cached:
+                # 绘制 glow（使用缓存的 glow 版，放在主体下方）
+                glow = cached.get('glow')
+                if glow:
+                    gx = a['x'] - (glow.get_width() - w) // 2
+                    gy = a['y'] - (glow.get_height() - h) // 2
+                    screen.blit(glow, (gx, gy), special_flags=pygame.BLEND_ADD)
+
+                # 主体：对 base_surf 做缩放（基于 speed 动态），然后设置 alpha
+                tw = max(1, int(w * scale))
+                th = max(1, int(h * scale))
+                main_surf = pygame.transform.smoothscale(base_surf, (tw, th))
+                tmp = main_surf.copy()
+                tmp.set_alpha(alpha)
+                # 使缩放朝中心扩展
+                dx = a['x'] - (tw - w) // 2
+                dy = a['y'] - (th - h) // 2
+                screen.blit(tmp, (dx, dy))
+            else:
+                # 回退：直接绘制并非线性淡出
+                tmp = base_surf.copy()
+                tmp.set_alpha(alpha)
+                screen.blit(tmp, (a['x'], a['y']))
+
+            a['life'] = life - 1
+        # 绘制粒子（先绘制较小粒子）
+        for p in particles:
+            p.draw(screen)
+        # 绘制粒子（人物之上的效果但在 UI 之下）
+        for p in particles:
+            p.draw(screen)
+        
+        # 绘制玩家
+        player1.draw(screen)
+        player2.draw(screen)
+
+        # 绘制粒子（人物之上的效果但在 UI 之下）
+        for p in particles:
+            p.draw(screen)
+
+
+        # 绘制UI
+        draw_ui(screen, player1, player2, p1_avatar=local_p1, p2_avatar=local_p2)
+
+
+        # 游戏结束画面
+        if game_over:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill(BLACK)
+            screen.blit(overlay, (0, 0))
+
+
+            win_text = font_large.render(f"{winner} WINS!", True, ORANGE)
+            win_rect = win_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+            screen.blit(win_text, win_rect)
+
+
+            restart_text = font_medium.render("Press SPACE to restart", True, WHITE)
+            restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+            screen.blit(restart_text, restart_rect)
+
+
+        pygame.display.flip()
+    
+    pygame.quit()
+
+
+if __name__ == "__main__":
+    while True:
+        main()
+import pygame
+import random
+import math
+
+# 初始化Pygame
+pygame.init()
+
+# 游戏窗口设置
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("King of Python - Demo Test 1.1")
+
+# 颜色定义
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 60, 60)
+BLUE = (60, 120, 255)
+ORANGE = (255, 150, 50)
+GREEN = (80, 200, 80)
+GRAY = (150, 150, 150)
+BG_COLOR = (240, 240, 250)
+
+# 游戏设置
+FPS = 60
+GRAVITY = 0.8
+JUMP_POWER = -15
+MOVE_SPEED = 5
+ATTACK_COOLDOWN = 30  # 攻击冷却时间（帧）
+BUBBLE_SPAWN_TIME = 180  # 泡泡生成间隔（帧）
+
+# 字体
+font_large = pygame.font.Font(None, 72)
+font_medium = pygame.font.Font(None, 48)
+font_small = pygame.font.Font(None, 32)
+
+class Player:
+    def __init__(self, x, y, color, controls, facing_right=True):
+        self.x = x
+        self.y = y
+        self.width = 40
+        self.height = 60
+        self.color = color
+        self.vel_x = 0
+        self.vel_y = 0
+        self.hp = 100
+        self.max_hp = 100
+        self.on_ground = False
+        self.facing_right = facing_right
+        self.controls = controls
+        
+        # 战斗相关
+        self.has_pow_bubble = False
+        self.attack_cooldown = 0
+        self.is_attacking = False
+        self.attack_frame = 0
+        self.attack_power = 3
+        self.knockback_x = 0
+        # 新增：pow 类型（'push' 或 'freeze'），以及冻结计时器
+        self.pow_type = None
+        self.frozen_timer = 0
+        
+    def update(self, keys, platform):
+        # 更新攻击状态
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+        
+        if self.is_attacking:
+            self.attack_frame += 1
+            if self.attack_frame > 15:  # 攻击动画持续15帧
+                self.is_attacking = False
+                self.attack_frame = 0
+
+        # 冻结处理：冻结时禁止移动和攻击（但仍受重力影响并进行平台碰撞检测）
+        if self.frozen_timer > 0:
+            self.frozen_timer -= 1
+            self.is_attacking = False
+            self.attack_frame = 0
+            # 阻止水平移动
+            self.vel_x = 0
+            # 仍应用重力
+            self.vel_y += GRAVITY
+            self.x += self.vel_x
+            self.y += self.vel_y
+            # 平台碰撞检测（保持站立）
+            self.on_ground = False
+            if self.check_platform_collision(platform):
+                if self.vel_y > 0:
+                    self.y = platform['y'] - self.height
+                    self.vel_y = 0
+                    self.on_ground = True
+            # 冻结期间忽略输入
+            return
+        
+        # 处理击退
+        if abs(self.knockback_x) > 0.1:
+            self.x += self.knockback_x
+            self.knockback_x *= 0.8  # 击退衰减
+        else:
+            self.knockback_x = 0
+        
+        # 控制移动
+        if keys[self.controls['left']] and not self.is_attacking:
+            self.vel_x = -MOVE_SPEED
+            self.facing_right = False
+        elif keys[self.controls['right']] and not self.is_attacking:
+            self.vel_x = MOVE_SPEED
+            self.facing_right = True
+        else:
+            self.vel_x = 0
+        
+        # 跳跃
+        if keys[self.controls['jump']] and self.on_ground:
+            self.vel_y = JUMP_POWER
+            self.on_ground = False
+        
+        # 攻击：按攻击键即触发攻击；若持有 pow 则为强化攻击并消耗 pow
+        if keys[self.controls['attack']] and self.attack_cooldown <= 0:
+            self.is_attacking = True
+            self.attack_cooldown = ATTACK_COOLDOWN
+            if self.has_pow_bubble:
+                self.attack_power = 8
+                self.has_pow_bubble = False
+            else:
+                self.attack_power = 3
+        
+        # 应用重力
+        self.vel_y += GRAVITY
+        
+        # 更新位置
+        self.x += self.vel_x
+        self.y += self.vel_y
+        
+        # 平台碰撞检测
+        self.on_ground = False
+        if self.check_platform_collision(platform):
+            if self.vel_y > 0:  # 向下移动
+                self.y = platform['y'] - self.height
+                self.vel_y = 0
+                self.on_ground = True
+        
+        # 边界限制
+        if self.x < 0:
+            self.x = 0
+        if self.x > WIDTH - self.width:
+            self.x = WIDTH - self.width
+        
+        # 掉出场外判定
+        if self.y > HEIGHT:
+            self.hp = 0
+    
+    def check_platform_collision(self, platform):
+        return (self.x < platform['x'] + platform['width'] and
+                self.x + self.width > platform['x'] and
+                self.y < platform['y'] + platform['height'] and
+                self.y + self.height > platform['y'])
+    
+    def get_attack_rect(self):
+        """获取攻击判定区域"""
+        if not self.is_attacking:
+            return None
+        
+        attack_width = 80
+        attack_height = 60
+        if self.facing_right:
+            attack_x = self.x + self.width
+        else:
+            attack_x = self.x - attack_width
+        attack_y = self.y
+        
+        return {
+            'x': attack_x,
+            'y': attack_y,
+            'width': attack_width,
+            'height': attack_height
+        }
+    
+    def take_damage(self, damage, knockback_direction):
+        """受到伤害"""
+        self.hp -= damage
+        if self.hp < 0:
+            self.hp = 0
+        
+        # 应用击退（默认强度15）
+        self.knockback_x = knockback_direction * 15
+    
+    def draw(self, screen):
+        # 绘制角色方块
+        if self.is_attacking and self.attack_frame % 4 < 2:
+            # 攻击时闪烁效果
+            color = (min(255, self.color[0] + 50), 
+                    min(255, self.color[1] + 50), 
+                    min(255, self.color[2] + 50))
+        else:
+            color = self.color
+        
+        pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
+        pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+        
+        # 绘制眼睛
+        eye_y = int(self.y + 15)
+        if self.facing_right:
+            left_eye = (int(self.x + 12), eye_y)
+            right_eye = (int(self.x + 28), eye_y)
+        else:
+            left_eye = (int(self.x + 12), eye_y)
+            right_eye = (int(self.x + 28), eye_y)
+        
+        pygame.draw.circle(screen, BLACK, left_eye, 4)
+        pygame.draw.circle(screen, BLACK, right_eye, 4)
+        
+        # 如果有pow泡泡，显示指示器
+        if self.has_pow_bubble:
+            indicator_x = int(self.x + self.width // 2)
+            indicator_y = int(self.y - 10)
+            pygame.draw.circle(screen, ORANGE, (indicator_x, indicator_y), 5)
+            # 显示 pow 类型指示
+            if self.pow_type:
+                label = 'PUSH' if self.pow_type == 'push' else 'ICE'
+                lbl = font_small.render(label, True, BLACK)
+                screen.blit(lbl, (indicator_x - lbl.get_width()//2, indicator_y - 20))
+        
+        # （移除原有攻击判定黄色框，改为粒子/效果视觉）
+        # 冻结效果可视化
+        if self.frozen_timer > 0:
+            overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            overlay.fill((170, 220, 255, 120))
+            screen.blit(overlay, (int(self.x), int(self.y)))
+
+class Bubble:
+    def __init__(self, x, y, bubble_type='pow'):
+        self.x = x
+        self.y = y
+        self.size = 25
+        self.vel_y = 2
+        # 对于 'pow' 类型，随机决定是 push 还是 freeze 的 pow
+        self.active = True
+        if bubble_type == 'pow':
+            # 按概率决定是 push 还是 freeze
+            if random.random() < POW_PUSH_PROB:
+                self.type = 'pow_push'
+            else:
+                self.type = 'pow_freeze'
+        else:
+            self.type = bubble_type
+
+        # 根据类型选择颜色
+        if self.type == 'pow_push':
+            self.color = ORANGE
+        elif self.type == 'pow_freeze':
+            self.color = FREEZE_PARTICLE_COLOR
+        elif self.type == 'harm':
+            self.color = (220, 40, 40)
+        else:
+            self.color = ORANGE
+        
+    def update(self):
+        self.y += self.vel_y
+        if self.y > HEIGHT:
+            self.active = False
+    
+    def draw(self, screen):
+        # 绘制泡泡
+        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.size, 2)
+        
+        # 绘制类型文字
+        if self.type == 'pow_push':
+            label = 'POW'
+            text_color = BLACK
+        elif self.type == 'pow_freeze':
+            label = 'ICE'
+            text_color = BLACK
+        elif self.type == 'harm':
+            label = '!'
+            text_color = WHITE
+        else:
+            label = ''
+            text_color = BLACK
+
+        if label:
+            text = font_small.render(label, True, text_color)
+            text_rect = text.get_rect(center=(int(self.x), int(self.y)))
+            screen.blit(text, text_rect)
+    
+    def check_collision(self, player):
+        """检测与玩家的碰撞"""
+        dist = math.sqrt((self.x - (player.x + player.width//2))**2 + 
+                        (self.y - (player.y + player.height//2))**2)
+        return dist < self.size + player.width//2
+
+def check_player_collision(player1, player2):
+    """检测两个玩家之间的碰撞"""
+    if (player1.x < player2.x + player2.width and
+        player1.x + player1.width > player2.x and
+        player1.y < player2.y + player2.height and
+        player1.y + player1.height > player2.y):
+        
+        # 产生轻微击退
+        if player1.x < player2.x:
+            player1.x -= 2
+            player2.x += 2
+        else:
+            player1.x += 2
+            player2.x -= 2
+        
+        return True
+    return False
+
+def check_attack_hit(attacker, defender):
+    """检测攻击是否命中"""
+    attack_rect = attacker.get_attack_rect()
+    if not attack_rect:
+        return False
+    
+    # 检测defender是否在攻击范围内
+    if (defender.x < attack_rect['x'] + attack_rect['width'] and
+        defender.x + defender.width > attack_rect['x'] and
+        defender.y < attack_rect['y'] + attack_rect['height'] and
+        defender.y + defender.height > attack_rect['y']):
+        return True
+    return False
+
+def draw_ui(screen, player1, player2):
+    """绘制UI（血条等）"""
+    # 血条设置
+    hp_bar_width = 300
+    hp_bar_height = 25
+    hp_bar_y = 20
+    
+    # 玩家1血条（左侧）
+    p1_x = 50
+    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
+    pygame.draw.rect(screen, player1.color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
+    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    
+    # 玩家1名称
+    p1_text = font_small.render("PLAYER 1", True, player1.color)
+    screen.blit(p1_text, (p1_x, hp_bar_y - 25))
+    
+    # 玩家2血条（右侧）
+    p2_x = WIDTH - 50 - hp_bar_width
+    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
+    pygame.draw.rect(screen, player2.color, (p2_x, hp_bar_y, hp2_width, hp_bar_height))
+    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    
+    # 玩家2名称
+    p2_text = font_small.render("PLAYER 2", True, player2.color)
+    p2_text_rect = p2_text.get_rect(right=p2_x + hp_bar_width, top=hp_bar_y - 25)
+    screen.blit(p2_text, p2_text_rect)
+
+def draw_platform(screen, platform):
+    """绘制平台"""
+    # 绘制阴影
+    pygame.draw.rect(screen, (100, 100, 100), 
+                    (platform['x'] + 3, platform['y'] + 3, 
+                     platform['width'], platform['height']))
+    # 绘制平台
+    pygame.draw.rect(screen, GREEN, 
+                    (platform['x'], platform['y'], 
+                     platform['width'], platform['height']))
+    pygame.draw.rect(screen, (60, 160, 60), 
+                    (platform['x'], platform['y'], 
+                     platform['width'], platform['height']), 3)
+
+def main():
+    clock = pygame.time.Clock()
+    
+    # 创建平台
+    platform = {
+        'x': WIDTH // 2 - 200,
+        'y': HEIGHT - 150,
+        'width': 400,
+        'height': 20
+    }
+    
+    # 创建玩家
+    player1_controls = {
+        'left': pygame.K_a,
+        'right': pygame.K_d,
+        'jump': pygame.K_w,
+        'attack': pygame.K_f
+    }
+    player2_controls = {
+        'left': pygame.K_LEFT,
+        'right': pygame.K_RIGHT,
+        'jump': pygame.K_UP,
+        'attack': pygame.K_l
+    }
+    
+    player1 = Player(250, 200, BLUE, player1_controls, facing_right=True)
+    player2 = Player(500, 200, RED, player2_controls, facing_right=False)
+    
+    bubbles = []
+    particles = []
+    bubble_timer = 0
+    frame_count = 0
+    
+    running = True
+    game_over = False
+    winner = None
+    
+    while running:
+        clock.tick(FPS)
+        frame_count += 1
+        
+        # 事件处理
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                if game_over and event.key == pygame.K_SPACE:
+                    return  # 重新开始
+        
+        if not game_over:
+            keys = pygame.key.get_pressed()
+            
+            # 更新玩家（传入 particles 用于生成拖尾和其它特效）
+            player1.update(keys, platform, particles)
+            player2.update(keys, platform, particles)
+            
+            # 检测玩家之间的碰撞
+            check_player_collision(player1, player2)
+            
+            # 检测攻击命中
+            if player1.is_attacking and player1.attack_frame == 5:  # 攻击生效帧
+                if check_attack_hit(player1, player2):
+                    knockback_dir = 1 if player1.facing_right else -1
+                    # 命中产生小撞击粒子
+                    spawn_hit_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2)
+                    # 根据 pow_type 应用不同效果
+                    if getattr(player1, 'pow_type', None) == 'freeze':
+                        # 冻结效果：中等伤害 + 轻微推开 + 冻结帧
+                        player2.take_damage(POWER_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * FREEZE_KNOCKBACK
+                        player2.frozen_timer = FREEZE_DURATION_FRAMES
+                        spawn_freeze_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2, count=FREEZE_PARTICLE_COUNT)
+                    elif getattr(player1, 'pow_type', None) == 'push':
+                        # 强力推开
+                        player2.take_damage(POWER_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * PUSH_KNOCKBACK
+                        spawn_push_particles(particles, player2.x + player2.width/2, player2.y + player2.height/2, direction=knockback_dir, count=PUSH_PARTICLE_COUNT)
+                    else:
+                        # 普通攻击
+                        player2.take_damage(NORMAL_DAMAGE, 0)
+                        player2.knockback_x = knockback_dir * 15
+                    # 消耗 pow 类型
+                    player1.pow_type = None
+            
+            if player2.is_attacking and player2.attack_frame == 5:
+                if check_attack_hit(player2, player1):
+                    knockback_dir = 1 if player2.facing_right else -1
+                    spawn_hit_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2)
+                    if getattr(player2, 'pow_type', None) == 'freeze':
+                        player1.take_damage(POWER_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * FREEZE_KNOCKBACK
+                        player1.frozen_timer = FREEZE_DURATION_FRAMES
+                        spawn_freeze_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2, count=FREEZE_PARTICLE_COUNT)
+                    elif getattr(player2, 'pow_type', None) == 'push':
+                        player1.take_damage(POWER_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * PUSH_KNOCKBACK
+                        spawn_push_particles(particles, player1.x + player1.width/2, player1.y + player1.height/2, direction=knockback_dir, count=PUSH_PARTICLE_COUNT)
+                    else:
+                        player1.take_damage(NORMAL_DAMAGE, 0)
+                        player1.knockback_x = knockback_dir * 15
+                    player2.pow_type = None
+            
+            # 生成泡泡
+            bubble_timer += 1
+            if bubble_timer >= BUBBLE_SPAWN_TIME:
+                x = random.randint(100, WIDTH - 100)
+                bubbles.append(Bubble(x, -50, 'pow'))
+                bubble_timer = 0
+            
+            # 更新泡泡
+            for bubble in bubbles[:]:
+                bubble.update()
+                if not bubble.active:
+                    bubbles.remove(bubble)
+                else:
+                    # 检测玩家拾取泡泡
+                    if bubble.check_collision(player1) and not player1.has_pow_bubble:
+                        player1.has_pow_bubble = True
+                        # 记录 pow 子类型
+                        if bubble.type == 'pow_freeze':
+                            player1.pow_type = 'freeze'
+                        else:
+                            player1.pow_type = 'push'
+                        bubbles.remove(bubble)
+                    elif bubble.check_collision(player2) and not player2.has_pow_bubble:
+                        player2.has_pow_bubble = True
+                        if bubble.type == 'pow_freeze':
+                            player2.pow_type = 'freeze'
+                        else:
+                            player2.pow_type = 'push'
+                        bubbles.remove(bubble)
+            
+            # 更新粒子特效
+            for p in particles[:]:
+                p.update()
+                if p.life <= 0:
+                    particles.remove(p)
+
+            # 检查游戏结束条件
+            if player1.hp <= 0:
+                game_over = True
+                winner = "PLAYER 2"
+            elif player2.hp <= 0:
+                game_over = True
+                winner = "PLAYER 1"
+        
+        # 绘制
+        screen.fill(BG_COLOR)
+        
+        # 绘制平台
+        draw_platform(screen, platform)
+        
+        # 绘制泡泡
+        for bubble in bubbles:
+            bubble.draw(screen)
+        
+        # 绘制玩家
+        player1.draw(screen)
+        player2.draw(screen)
+        
+        # 绘制UI
+        draw_ui(screen, player1, player2)
+        
+        # 游戏结束画面
+        if game_over:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill(BLACK)
+            screen.blit(overlay, (0, 0))
+            
+            win_text = font_large.render(f"{winner} WINS!", True, ORANGE)
+            win_rect = win_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+            screen.blit(win_text, win_rect)
+            
+            restart_text = font_medium.render("Press SPACE to restart", True, WHITE)
+            restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+            screen.blit(restart_text, restart_rect)
+        
+        pygame.display.flip()
+    
+    pygame.quit()
+
+if __name__ == "__main__":
+    while True:
+        main()
