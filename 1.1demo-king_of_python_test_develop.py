@@ -110,7 +110,7 @@ class Player:
     def __init__(self, x, y, color, controls, facing_right=True):
         self.x = x
         self.y = y
-        self.width = 40
+        self.width = 60
         self.height = 60
         self.color = color
         self.vel_x = 0
