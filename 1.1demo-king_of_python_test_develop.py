@@ -53,44 +53,60 @@ except Exception:
     frame2_surf = None
 
 
-def compose_head(frame_surf, photo_surf, inner_padding=24):
+def compose_head(frame_surf, photo_surf, inner_padding=24, frame_scale=1.15, photo_scale=0.6, x_offset=0, y_offset=-12):
     """Compose a head sprite by placing the circular photo into the frame's hole.
 
     frame_surf: pygame.Surface (with alpha), photo_surf: pygame.Surface
+    inner_padding: pixels to leave around the inner circular hole (bigger -> smaller hole)
+    frame_scale: multiply frame size by this factor before composing (>
+        1.0 makes the frame visually larger)
+    photo_scale: multiply the hole diameter by this factor to make the photo
+        smaller than the hole (<=1.0). Useful to leave visible frame border.
+    x_offset, y_offset: adjust photo placement inside the frame (pixels).
     Returns a new Surface or None on failure.
-    inner_padding: pixels to leave around the inner circular hole.
     """
     if not frame_surf or not photo_surf:
         return None
     try:
         fw, fh = frame_surf.get_size()
-        # We'll assume inner circle diameter is min(frame size) - inner_padding*2
-        diameter = max(8, min(fw, fh) - inner_padding * 2)
-        # scale photo to diameter
-        photo_scaled = pygame.transform.smoothscale(photo_surf, (diameter, diameter))
+        # optionally scale the decorative frame larger/smaller
+        if frame_scale != 1.0:
+            new_fw = max(1, int(fw * frame_scale))
+            new_fh = max(1, int(fh * frame_scale))
+            frame_scaled = pygame.transform.smoothscale(frame_surf, (new_fw, new_fh))
+        else:
+            new_fw, new_fh = fw, fh
+            frame_scaled = frame_surf
 
-        # create surface to hold composition
-        comp = pygame.Surface((fw, fh), pygame.SRCALPHA)
+        # inner circle diameter available for the photo (before photo_scale)
+        diameter = max(8, min(new_fw, new_fh) - inner_padding * 2)
+        # final photo diameter after applying photo_scale (photo_scale <= 1.0 shrinks photo)
+        photo_diameter = max(4, int(diameter * photo_scale))
 
-        # create masked photo surface same size as comp
-        photo_layer = pygame.Surface((fw, fh), pygame.SRCALPHA)
-        # center position
-        px = (fw - diameter) // 2
-        py = (fh - diameter) // 2
+        # scale photo to computed size
+        photo_scaled = pygame.transform.smoothscale(photo_surf, (photo_diameter, photo_diameter))
+
+        # create composition surface sized to the (possibly scaled) frame
+        comp = pygame.Surface((new_fw, new_fh), pygame.SRCALPHA)
+
+        # photo layer (same size as comp) - we'll blit the smaller photo centered with offsets
+        photo_layer = pygame.Surface((new_fw, new_fh), pygame.SRCALPHA)
+        px = (new_fw - photo_diameter) // 2 + x_offset
+        py = (new_fh - photo_diameter) // 2 + y_offset
         photo_layer.blit(photo_scaled, (px, py))
 
-        # mask with a filled circle to keep only circular area
-        mask = pygame.Surface((fw, fh), pygame.SRCALPHA)
+        # mask: keep the circular area (use original diameter, not the shrunken photo)
+        mask = pygame.Surface((new_fw, new_fh), pygame.SRCALPHA)
         mask.fill((0, 0, 0, 0))
-        center = (fw // 2, fh // 2)
+        center = (new_fw // 2 + x_offset, new_fh // 2 + y_offset)
         radius = diameter // 2
         pygame.draw.circle(mask, (255, 255, 255, 255), center, radius)
         # apply mask by multiplying alpha
         photo_layer.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
-        # blit masked photo then the frame on top
+        # blit masked photo then the scaled frame on top
         comp.blit(photo_layer, (0, 0))
-        comp.blit(frame_surf, (0, 0))
+        comp.blit(frame_scaled, (0, 0))
         return comp
     except Exception:
         return None
@@ -110,8 +126,8 @@ class Player:
     def __init__(self, x, y, color, controls, facing_right=True):
         self.x = x
         self.y = y
-        self.width = 60
-        self.height = 60
+        self.width = 80
+        self.height = 80
         self.color = color
         self.vel_x = 0
         self.vel_y = 0

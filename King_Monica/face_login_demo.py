@@ -107,11 +107,28 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
                     for i, (x, y, fw, fh) in enumerate(faces[:2]):
                         crop = frame[y:y+fh, x:x+fw]
                         sprite = cv2.resize(crop, (80, 80), interpolation=cv2.INTER_AREA)
-                        fname = f"Face{i+1}_{timestamp}.png"
-                        path = os.path.join(captures_dir, fname)
-                        cv2.imwrite(path, sprite)
-                        saved_paths.append(os.path.abspath(path))
-                        print(f"Captured face {i+1}: {path}")
+                        # create circular alpha mask and save as PNG with transparency
+                        try:
+                            import numpy as np
+                            h, w = sprite.shape[:2]
+                            mask = np.zeros((h, w), dtype=np.uint8)
+                            radius = min(w, h) // 2
+                            center = (w // 2, h // 2)
+                            cv2.circle(mask, center, radius, 255, -1)
+                            b, g, r = cv2.split(sprite)
+                            bgra = cv2.merge([b, g, r, mask])
+                            fname = f"Face{i+1}_{timestamp}.png"
+                            path = os.path.join(captures_dir, fname)
+                            cv2.imwrite(path, bgra)
+                            saved_paths.append(os.path.abspath(path))
+                            print(f"Captured face {i+1}: {path}")
+                        except Exception:
+                            # fallback to saving without alpha
+                            fname = f"Face{i+1}_{timestamp}.png"
+                            path = os.path.join(captures_dir, fname)
+                            cv2.imwrite(path, sprite)
+                            saved_paths.append(os.path.abspath(path))
+                            print(f"Captured face {i+1} (no alpha): {path}")
                     # return appropriate face based on label if possible
                     if 'Face1' in label:
                         saved_path = saved_paths[0]
@@ -129,11 +146,28 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
                 crop = frame[y0:y0 + side, x0:x0 + side]
                 sprite = cv2.resize(crop, (80, 80), interpolation=cv2.INTER_AREA)
 
-                fname = f"{label}_{timestamp}.png"
-                path = os.path.join(captures_dir, fname)
-                cv2.imwrite(path, sprite)
-                saved_path = os.path.abspath(path)
-                print(f"Captured and saved: {saved_path}")
+                # save with circular alpha mask so the PNG is circular
+                try:
+                    import numpy as np
+                    h2, w2 = sprite.shape[:2]
+                    mask = np.zeros((h2, w2), dtype=np.uint8)
+                    radius = min(w2, h2) // 2
+                    center = (w2 // 2, h2 // 2)
+                    cv2.circle(mask, center, radius, 255, -1)
+                    b, g, r = cv2.split(sprite)
+                    bgra = cv2.merge([b, g, r, mask])
+                    fname = f"{label}_{timestamp}.png"
+                    path = os.path.join(captures_dir, fname)
+                    cv2.imwrite(path, bgra)
+                    saved_path = os.path.abspath(path)
+                    print(f"Captured and saved: {saved_path}")
+                except Exception:
+                    # fallback to saving without alpha
+                    fname = f"{label}_{timestamp}.png"
+                    path = os.path.join(captures_dir, fname)
+                    cv2.imwrite(path, sprite)
+                    saved_path = os.path.abspath(path)
+                    print(f"Captured and saved (no alpha): {saved_path}")
                 break
             if key == ord('q') or key == 27:  # 'q' or ESC
                 print("Capture cancelled by user")
