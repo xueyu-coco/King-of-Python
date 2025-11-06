@@ -31,13 +31,23 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
         print("OpenCV is required for face capture (pip install opencv-python).", e)
         return None
 
+    captures_dir = os.path.join(os.path.dirname(__file__), "captures")
+    os.makedirs(captures_dir, exist_ok=True)
+
+    # If a recent capture for this label already exists (from a previous quick capture), return it
+    try:
+        recent = sorted([os.path.join(captures_dir, f) for f in os.listdir(captures_dir) if f.startswith(label + "_")], key=os.path.getmtime, reverse=True)
+        if recent:
+            # if the most recent file is newer than 10 seconds, return it to support sequential calls
+            if time.time() - os.path.getmtime(recent[0]) < 10:
+                return os.path.abspath(recent[0])
+    except Exception:
+        pass
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Could not open webcam.")
         return None
-
-    captures_dir = os.path.join(os.path.dirname(__file__), "captures")
-    os.makedirs(captures_dir, exist_ok=True)
 
     window_name = f"Capture - {label} (press C or SPACE to capture, Q to cancel)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -56,17 +66,46 @@ def capture_and_make_sprite(label: str) -> Optional[str]:
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('c') or key == 32:  # 'c' or SPACE
-                # Save a resized square PNG
+                # Detect faces and save one or two sprites depending on detection
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                try:
+                    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                except Exception:
+                    faces = ()
+
                 h, w = frame.shape[:2]
+                timestamp = int(time.time())
+
+                if len(faces) >= 2:
+                    # sort faces by x (left to right)
+                    faces = sorted(faces, key=lambda r: r[0])
+                    saved_paths = []
+                    for i, (x, y, fw, fh) in enumerate(faces[:2]):
+                        crop = frame[y:y+fh, x:x+fw]
+                        sprite = cv2.resize(crop, (80, 80), interpolation=cv2.INTER_AREA)
+                        fname = f"Face{i+1}_{timestamp}.png"
+                        path = os.path.join(captures_dir, fname)
+                        cv2.imwrite(path, sprite)
+                        saved_paths.append(os.path.abspath(path))
+                        print(f"Captured face {i+1}: {path}")
+                    # return appropriate face based on label if possible
+                    if 'Face1' in label:
+                        saved_path = saved_paths[0]
+                    elif 'Face2' in label:
+                        saved_path = saved_paths[1]
+                    else:
+                        saved_path = saved_paths[0]
+                    break
+
+                # If only one face or none detected, fallback to center crop
                 side = min(w, h)
-                # center crop
                 cx, cy = w // 2, h // 2
                 x0 = max(0, cx - side // 2)
                 y0 = max(0, cy - side // 2)
                 crop = frame[y0:y0 + side, x0:x0 + side]
                 sprite = cv2.resize(crop, (80, 80), interpolation=cv2.INTER_AREA)
 
-                timestamp = int(time.time())
                 fname = f"{label}_{timestamp}.png"
                 path = os.path.join(captures_dir, fname)
                 cv2.imwrite(path, sprite)
