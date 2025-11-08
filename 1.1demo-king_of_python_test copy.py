@@ -47,7 +47,7 @@ try:
     REPO_ROOT = os.path.abspath(HERE)
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
-    from King_Monica.face_login_demo import capture_and_make_sprite
+    from face_login_demo import capture_and_make_sprite
 except Exception:
     capture_and_make_sprite = None
 
