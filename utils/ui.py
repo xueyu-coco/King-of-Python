@@ -1,3 +1,6 @@
+import pygame
+from settings import *
+
 def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     hp_bar_width = 300
     hp_bar_height = 25
