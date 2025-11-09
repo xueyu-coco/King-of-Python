@@ -611,10 +611,8 @@ def main():
     while start:
         screen.fill(BG_COLOR)
         title = font_large.render('King of Python', True, BLACK)
-        subtitle = font_medium.render('The Great Keyboard', True, PURPLE)
         sub = font_small.render('Press C to capture faces, S to skip and start', True, BLACK)
         screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 100))
-        screen.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, HEIGHT//2 - 40))
         screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT//2 + 20))
         pygame.display.flip()
         
