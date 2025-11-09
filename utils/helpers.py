@@ -1,3 +1,5 @@
+import pygame
+
 def check_player_collision(player1, player2):
     if (player1.x < player2.x + player2.width and
         player1.x + player1.width > player2.x and

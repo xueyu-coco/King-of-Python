@@ -1,3 +1,6 @@
+from entities.platform import KeyPlatform
+from settings import *
+
 def create_keyboard_platforms():
     """创建键盘主题的平台布局"""
     platforms = []
