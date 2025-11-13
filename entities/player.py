@@ -275,8 +275,8 @@ class Player:
                 # 如果有头像，将头像居中绘制在frame中间
                 if self.avatar:
                     aw, ah = self.avatar.get_size()
-                    max_w = int(self.width * 0.8)
-                    max_h = int(self.height * 0.8)
+                    max_w = int(self.width * 0.5)
+                    max_h = int(self.height * 0.5)
                     scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
                     new_w = max(1, int(aw * scale))
                     new_h = max(1, int(ah * scale))
@@ -332,8 +332,8 @@ class Player:
                 screen.blit(img, (int(self.x), int(self.y)))
                 if self.avatar:
                     aw, ah = self.avatar.get_size()
-                    max_w = int(self.width * 0.8)
-                    max_h = int(self.height * 0.8)
+                    max_w = int(self.width * 0.5)
+                    max_h = int(self.height * 0.5)
                     scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
                     new_w = max(1, int(aw * scale))
                     new_h = max(1, int(ah * scale))
@@ -348,8 +348,8 @@ class Player:
                 pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
                 if self.avatar:
                     aw, ah = self.avatar.get_size()
-                    max_w = int(self.width * 0.8)
-                    max_h = int(self.height * 0.8)
+                    max_w = int(self.width * 0.5)
+                    max_h = int(self.height * 0.5)
                     scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
                     new_w = max(1, int(aw * scale))
                     new_h = max(1, int(ah * scale))
