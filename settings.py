@@ -36,10 +36,13 @@ FREEZE_DURATION = 180
 REVERSED_DURATION = 600
 PROJECTILE_SPEED = 8
 
-# 字体
-font_large = pygame.font.Font(None, 72)
-font_medium = pygame.font.Font(None, 48)
-font_small = pygame.font.Font(None, 32)
-font_tiny = pygame.font.Font(None, 24)
-font_bubble = pygame.font.Font(None, 20)
-font_key = pygame.font.Font(None, 36)
+# 字体 - 使用方舟像素字体
+import os
+FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'ark-pixel-12px-proportional-zh_cn.otf')
+
+font_large = pygame.font.Font(FONT_PATH, 48)
+font_medium = pygame.font.Font(FONT_PATH, 36)
+font_small = pygame.font.Font(FONT_PATH, 24)
+font_tiny = pygame.font.Font(FONT_PATH, 18)
+font_bubble = pygame.font.Font(FONT_PATH, 16)
+font_key = pygame.font.Font(FONT_PATH, 28)
