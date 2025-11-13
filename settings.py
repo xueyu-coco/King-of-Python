@@ -3,7 +3,7 @@ import pygame
 pygame.init()
 
 # 游戏窗口设置
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1200, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("King of Python - The Great Keyboard")
 
@@ -27,22 +27,22 @@ KEY_SIDE = (180, 180, 200)
 
 # 游戏设置
 FPS = 60
-GRAVITY = 0.8
-JUMP_POWER = -15
-MOVE_SPEED = 5
+GRAVITY = 1.0
+JUMP_POWER = -18
+MOVE_SPEED = 6
 ATTACK_COOLDOWN = 30
 BUBBLE_SPAWN_TIME = 150
 FREEZE_DURATION = 180
 REVERSED_DURATION = 600
-PROJECTILE_SPEED = 8
+PROJECTILE_SPEED = 10
 
 # 字体 - 使用方舟像素字体
 import os
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'ark-pixel-12px-proportional-zh_cn.otf')
 
-font_large = pygame.font.Font(FONT_PATH, 48)
-font_medium = pygame.font.Font(FONT_PATH, 36)
-font_small = pygame.font.Font(FONT_PATH, 24)
-font_tiny = pygame.font.Font(FONT_PATH, 18)
-font_bubble = pygame.font.Font(FONT_PATH, 16)
-font_key = pygame.font.Font(FONT_PATH, 28)
+font_large = pygame.font.Font(FONT_PATH, 60)
+font_medium = pygame.font.Font(FONT_PATH, 45)
+font_small = pygame.font.Font(FONT_PATH, 30)
+font_tiny = pygame.font.Font(FONT_PATH, 22)
+font_bubble = pygame.font.Font(FONT_PATH, 20)
+font_key = pygame.font.Font(FONT_PATH, 35)

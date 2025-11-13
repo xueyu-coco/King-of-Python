@@ -6,8 +6,8 @@ class Bubble:
     def __init__(self, x, y, bubble_type='pow'):
         self.x = x
         self.y = y
-        self.size = 25
-        self.vel_y = 2
+        self.size = 32
+        self.vel_y = 2.5
         self.type = bubble_type
         self.active = True
         
