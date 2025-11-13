@@ -49,6 +49,12 @@ def capture_face_image(wait_seconds=3, label=None):
         stable_required = 10  # number of frames with low movement
         movement_threshold = 6  # pixels
 
+        # smoothing / hold parameters to avoid flicker when detection is intermittent
+        last_box = None  # (x, y, w, h) last drawn box
+        last_seen = 0
+        hold_frames = 6  # number of frames to keep showing last_box when detection is lost
+        smooth_alpha = 0.45  # smoothing factor (0=no smoothing, 1=jump to new box)
+
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -71,6 +77,8 @@ def capture_face_image(wait_seconds=3, label=None):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
 
+            display = frame.copy()
+
             if len(faces) > 0:
                 # pick largest face
                 faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)
@@ -83,8 +91,23 @@ def capture_face_image(wait_seconds=3, label=None):
                 if len(recent_centers) > stable_required:
                     recent_centers.pop(0)
 
-                display = frame.copy()
-                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # smooth box coordinates with previous one to reduce jitter
+                if last_box is None:
+                    smooth_box = (x, y, w, h)
+                else:
+                    lx, ly, lw, lh = last_box
+                    sx = int(lx * (1 - smooth_alpha) + x * smooth_alpha)
+                    sy = int(ly * (1 - smooth_alpha) + y * smooth_alpha)
+                    sw = int(lw * (1 - smooth_alpha) + w * smooth_alpha)
+                    sh = int(lh * (1 - smooth_alpha) + h * smooth_alpha)
+                    smooth_box = (sx, sy, sw, sh)
+
+                last_box = smooth_box
+                last_seen = 0
+
+                # draw smoothed rectangle
+                bx, by, bw, bh = smooth_box
+                cv2.rectangle(display, (bx, by), (bx + bw, by + bh), (0, 255, 0), 2)
 
                 # check movement over recent centers
                 stable = False
@@ -97,7 +120,9 @@ def capture_face_image(wait_seconds=3, label=None):
                 # draw stability hint
                 status_text = 'Stable' if stable else 'Hold still...'
                 color = (0, 255, 0) if stable else (0, 165, 255)
-                cv2.putText(display, status_text, (x, y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                # use smoothed box coords for label placement when available
+                label_x, label_y = (bx, by) if last_box is not None else (x, y)
+                cv2.putText(display, status_text, (label_x, label_y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
                 # show a small circular preview of the face on the top-left
                 face_crop = crop_to_face(frame, (x, y, w, h), pad=0.2)
@@ -204,7 +229,26 @@ def capture_face_image(wait_seconds=3, label=None):
                 cv2.putText(frame, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
             except Exception:
                 pass
-            cv2.imshow('Face Capture', frame)
+            # if detection disappeared this frame, optionally show the last_box for a few frames
+            if last_box is not None and len(faces) == 0:
+                # hold last box for a few frames to avoid flicker
+                if last_seen < hold_frames:
+                    bx, by, bw, bh = last_box
+                    fb = frame.copy()
+                    cv2.rectangle(fb, (bx, by), (bx + bw, by + bh), (0, 200, 0), 2)
+                    try:
+                        cv2.putText(fb, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
+                        cv2.putText(fb, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                    except Exception:
+                        pass
+                    cv2.imshow('Face Capture', fb)
+                    last_seen += 1
+                else:
+                    # give up holding after hold_frames
+                    last_box = None
+                    cv2.imshow('Face Capture', frame)
+            else:
+                cv2.imshow('Face Capture', frame)
             if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
                 break
     finally:
@@ -239,6 +283,12 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
         stable_required = 10
         movement_threshold = 6
 
+        # smoothing/hold for two-face mode
+        last_boxes = None  # [(x1,y1,w1,h1),(x2,y2,w2,h2)]
+        last_seen = 0
+        hold_frames = 6
+        smooth_alpha = 0.45
+
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -260,11 +310,36 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
 
+
             if len(faces) >= 2:
                 # choose two largest faces
                 faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
                 (x1, y1, w1, h1), (x2, y2, w2, h2) = faces
 
+                # smooth boxes if we have previous ones
+                if last_boxes is None:
+                    sb1 = (x1, y1, w1, h1)
+                    sb2 = (x2, y2, w2, h2)
+                else:
+                    lx1, ly1, lw1, lh1 = last_boxes[0]
+                    lx2, ly2, lw2, lh2 = last_boxes[1]
+                    sb1 = (int(lx1 * (1 - smooth_alpha) + x1 * smooth_alpha),
+                           int(ly1 * (1 - smooth_alpha) + y1 * smooth_alpha),
+                           int(lw1 * (1 - smooth_alpha) + w1 * smooth_alpha),
+                           int(lh1 * (1 - smooth_alpha) + h1 * smooth_alpha))
+                    sb2 = (int(lx2 * (1 - smooth_alpha) + x2 * smooth_alpha),
+                           int(ly2 * (1 - smooth_alpha) + y2 * smooth_alpha),
+                           int(lw2 * (1 - smooth_alpha) + w2 * smooth_alpha),
+                           int(lh2 * (1 - smooth_alpha) + h2 * smooth_alpha))
+                last_boxes = (sb1, sb2)
+                last_seen = 0
+
+                display = frame.copy()
+                x1, y1, w1, h1 = sb1
+                x2, y2, w2, h2 = sb2
+                cv2.rectangle(display, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
+                cv2.rectangle(display, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
+                
                 cx1, cy1 = x1 + w1 // 2, y1 + h1 // 2
                 cx2, cy2 = x2 + w2 // 2, y2 + h2 // 2
                 recent_centers.append(((cx1, cy1), (cx2, cy2)))
@@ -382,7 +457,20 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                 cv2.putText(frame, 'Waiting for 2 faces...', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200,200,200), 2)
             except Exception:
                 pass
-            cv2.imshow('Face Capture', frame)
+            # if faces dropped, show last_boxes for a short hold to avoid flicker
+            if last_boxes is not None and len(faces) < 2:
+                if last_seen < hold_frames:
+                    fb = frame.copy()
+                    (bx1, by1, bw1, bh1), (bx2, by2, bw2, bh2) = last_boxes
+                    cv2.rectangle(fb, (bx1, by1), (bx1 + bw1, by1 + bh1), (0, 200, 0), 2)
+                    cv2.rectangle(fb, (bx2, by2), (bx2 + bw2, by2 + bh2), (0, 200, 0), 2)
+                    cv2.imshow('Face Capture', fb)
+                    last_seen += 1
+                else:
+                    last_boxes = None
+                    cv2.imshow('Face Capture', frame)
+            else:
+                cv2.imshow('Face Capture', frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
     finally:
