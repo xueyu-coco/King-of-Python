@@ -19,7 +19,7 @@ class KeyPlatform:
         self.is_breakable = is_breakable
         self.is_broken = False
         self.break_timer = 0  # 站在上面的计时
-        self.break_threshold = 1  # 立即断裂 = 1帧
+        self.break_threshold = 0  # 立即断裂 = 0帧（检测到就断）
         self.respawn_timer = 0  # 重生计时
         self.respawn_time = 180  # 3秒 = 180帧
         self.player_on_platform = False
@@ -55,25 +55,23 @@ class KeyPlatform:
                         if self.check_player_standing(player):
                             self.player_on_platform = True
                             self.break_timer += 1
+                            # 立即断裂，不等待
+                            if self.break_timer > self.break_threshold:
+                                self.is_broken = True
+                                self.break_timer = 0
                             break
                 
                 # 如果没有玩家，重置计时
                 if not self.player_on_platform:
-                    self.break_timer = max(0, self.break_timer - 2)  # 慢慢恢复
-                
-                # 检查是否达到断裂条件
-                if self.break_timer >= self.break_threshold:
-                    self.is_broken = True
                     self.break_timer = 0
     
     def check_player_standing(self, player):
         """检查玩家是否站在平台上"""
-        # 玩家底部在平台顶部附近
+        # 玩家底部在平台顶部附近（移除on_ground检查，更可靠）
         return (player.x < self.x + self.width and
                 player.x + player.width > self.x and
                 player.y + player.height >= self.y and
-                player.y + player.height <= self.y + 10 and
-                player.on_ground)
+                player.y + player.height <= self.y + 10)
     
     def draw(self, screen):
         """绘制3D键帽效果"""
@@ -97,30 +95,14 @@ class KeyPlatform:
         # 绘制按键顶面
         # 优先判断是否动态+可断裂（Shift键）
         if self.is_dynamic and self.is_breakable:
-            # Shift键：冰蓝色基础，根据破损程度变化
-            damage_ratio = self.break_timer / self.break_threshold
-            if damage_ratio > 0:
-                # 从冰蓝色逐渐变红
-                r = int(200 + damage_ratio * 55)
-                g = int(220 - damage_ratio * 100)
-                b = int(255 - damage_ratio * 55)  # 保持较高的蓝色值
-                key_color = (r, g, b)
-            else:
-                # 完好状态：冰蓝色
-                key_color = (200, 220, 255)
+            # Shift键：冰蓝色（立即断裂，不显示破损渐变）
+            key_color = (200, 220, 255)
         elif self.is_dynamic:
             # 仅动态平台：浅蓝色
             key_color = (200, 220, 255)
         elif self.is_breakable:
-            # 仅可断裂平台
-            damage_ratio = self.break_timer / self.break_threshold
-            if damage_ratio > 0:
-                r = int(200 + damage_ratio * 55)
-                g = int(220 - damage_ratio * 100)
-                b = int(255 - damage_ratio * 155)
-                key_color = (r, g, b)
-            else:
-                key_color = KEY_COLOR
+            # 仅可断裂平台（立即断裂，不显示破损渐变）
+            key_color = KEY_COLOR
         else:
             # 普通平台
             key_color = KEY_COLOR
@@ -128,9 +110,7 @@ class KeyPlatform:
         pygame.draw.rect(screen, key_color, 
                         (self.x, self.y, self.width, self.height))
         
-        # 绘制裂痕效果
-        if self.is_breakable and self.break_timer > 0:
-            self._draw_cracks(screen)
+        # 立即断裂，不绘制裂痕效果
         
         # 绘制按键边框
         pygame.draw.rect(screen, BLACK, 
@@ -152,29 +132,7 @@ class KeyPlatform:
             )
             screen.blit(arrow_text, arrow_rect)
         
-        # 可断裂平台警告
-        if self.is_breakable and self.player_on_platform:
-            # 显示破损进度条
-            bar_width = self.width - 10
-            bar_height = 4
-            bar_x = self.x + 5
-            bar_y = self.y + self.height + 5
-            
-            # 背景
-            pygame.draw.rect(screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
-            # 进度
-            progress_width = int(bar_width * (self.break_timer / self.break_threshold))
-            progress_color = (255, int(255 * (1 - self.break_timer / self.break_threshold)), 0)
-            pygame.draw.rect(screen, progress_color, (bar_x, bar_y, progress_width, bar_height))
-            
-            # 警告图标
-            if self.break_timer > self.break_threshold * 0.5:
-                warning_text = font_tiny.render("⚠", True, (255, 0, 0))
-                warning_rect = warning_text.get_rect(
-                    center=(self.x + self.width//2, self.y - 25)
-                )
-                if pygame.time.get_ticks() % 500 < 250:  # 闪烁
-                    screen.blit(warning_text, warning_rect)
+        # 立即断裂，不显示进度条和警告
     
     def _draw_cracks(self, screen):
         """绘制裂痕"""
