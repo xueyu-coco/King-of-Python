@@ -249,8 +249,8 @@ def main():
         'attack': pygame.K_l
     }
     
-    player1 = Player(200, 300, BLUE, player1_controls, facing_right=True)
-    player2 = Player(550, 300, RED, player2_controls, facing_right=False)
+    player1 = Player(200, 300, BLUE, player1_controls, facing_right=True, avatar=local_p1)
+    player2 = Player(550, 300, RED, player2_controls, facing_right=False, avatar=local_p2)
     
     bubbles = []
     projectiles = []
