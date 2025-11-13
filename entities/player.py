@@ -1,5 +1,6 @@
 import pygame
 import random
+import os
 from settings import *
 
 class Player:
@@ -30,6 +31,55 @@ class Player:
         # 反转状态
         self.is_reversed = False
         self.reverse_timer = 0
+
+        # 尝试加载玩家贴图（frame1.png 用于蓝色玩家，frame2.png 用于红色玩家）
+        self.image1 = None
+        self.image2 = None
+        self._flipped_image1 = None
+        self._flipped_image2 = None
+        def _try_load(name):
+            # 尝试多个常见路径
+            candidates = [
+                name,
+                os.path.join(os.path.dirname(__file__), name),
+                os.path.join(os.path.dirname(__file__), '..', name),
+                os.path.join(os.path.dirname(__file__), '..', 'assets', name),
+            ]
+            for p in candidates:
+                try:
+                    surf = pygame.image.load(p).convert_alpha()
+                    return surf
+                except Exception:
+                    continue
+            return None
+
+        # 只尝试在初始化一次加载资源并缩放到玩家尺寸
+        raw1 = _try_load('frame1.png')
+        raw2 = _try_load('frame2.png')
+        if raw1:
+            try:
+                self.image1 = pygame.transform.smoothscale(raw1, (self.width, self.height))
+            except Exception:
+                self.image1 = pygame.transform.scale(raw1, (self.width, self.height))
+        if raw2:
+            try:
+                self.image2 = pygame.transform.smoothscale(raw2, (self.width, self.height))
+            except Exception:
+                self.image2 = pygame.transform.scale(raw2, (self.width, self.height))
+
+        # 根据传入的颜色选择默认显示帧（如果两帧都存在，蓝色用frame1，红色用frame2）
+        self.use_image = False
+        if (self.image1 or self.image2):
+            self.use_image = True
+            if color == BLUE and self.image1:
+                self.current_image = self.image1
+            elif color == RED and self.image2:
+                self.current_image = self.image2
+            else:
+                # 如果颜色无法判断，优先使用image1然后image2
+                self.current_image = self.image1 or self.image2
+        else:
+            self.current_image = None
         
     def update(self, keys, platforms):
         # 更新反转状态
@@ -202,16 +252,30 @@ class Player:
             pygame.draw.rect(screen, ICE_BLUE, 
                            (int(self.x - ice_padding), int(self.y - ice_padding), 
                             self.width + ice_padding*2, self.height + ice_padding*2), 3)
-            
-            frozen_color = (
-                min(255, self.color[0] + 100),
-                min(255, self.color[1] + 150),
-                255
-            )
-            pygame.draw.rect(screen, frozen_color, 
-                           (int(self.x), int(self.y), self.width, self.height))
-            pygame.draw.rect(screen, CYAN, 
-                           (int(self.x), int(self.y), self.width, self.height), 2)
+            # 如果加载了图片，则绘制图片并加上冻结边框和雪花
+            if self.use_image and self.current_image:
+                img = self.current_image
+                if not self.facing_right:
+                    if self._flipped_image1 is None and self.image1:
+                        self._flipped_image1 = pygame.transform.flip(self.image1, True, False)
+                    if self._flipped_image2 is None and self.image2:
+                        self._flipped_image2 = pygame.transform.flip(self.image2, True, False)
+                    # 选择对应翻转图
+                    if self.current_image == self.image1 and self._flipped_image1:
+                        img = self._flipped_image1
+                    elif self.current_image == self.image2 and self._flipped_image2:
+                        img = self._flipped_image2
+                    else:
+                        img = pygame.transform.flip(self.current_image, True, False)
+                screen.blit(img, (int(self.x), int(self.y)))
+            else:
+                frozen_color = (
+                    min(255, self.color[0] + 100),
+                    min(255, self.color[1] + 150),
+                    255
+                )
+                pygame.draw.rect(screen, frozen_color, (int(self.x), int(self.y), self.width, self.height))
+                pygame.draw.rect(screen, CYAN, (int(self.x), int(self.y), self.width, self.height), 2)
             
             for i in range(3):
                 snowflake_x = int(self.x + self.width//2 + random.randint(-15, 15))
@@ -230,23 +294,27 @@ class Player:
                         min(255, self.color[2] + 50))
             else:
                 color = self.color
-            
-            pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
-            pygame.draw.rect(screen, BLACK, (int(self.x), int(self.y), self.width, self.height), 2)
+            # 绘制玩家：优先使用图片，否则回退到方块
+            if self.use_image and self.current_image:
+                img = self.current_image
+                # 根据朝向选择是否翻转
+                if not self.facing_right:
+                    # 预缓存翻转图以提高性能
+                    if self.current_image == self.image1:
+                        if self._flipped_image1 is None and self.image1:
+                            self._flipped_image1 = pygame.transform.flip(self.image1, True, False)
+                        img = self._flipped_image1 or pygame.transform.flip(self.image1, True, False)
+                    elif self.current_image == self.image2:
+                        if self._flipped_image2 is None and self.image2:
+                            self._flipped_image2 = pygame.transform.flip(self.image2, True, False)
+                        img = self._flipped_image2 or pygame.transform.flip(self.image2, True, False)
+                    else:
+                        img = pygame.transform.flip(self.current_image, True, False)
+                screen.blit(img, (int(self.x), int(self.y)))
+            else:
+                pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
         
-        eye_y = int(self.y + 15)
-        left_eye = (int(self.x + 12), eye_y)
-        right_eye = (int(self.x + 28), eye_y)
-        
-        # 眼睛颜色根据状态变化
-        if self.is_frozen:
-            eye_color = CYAN
-        elif self.is_reversed:
-            eye_color = DARK_RED
-        else:
-            eye_color = BLACK
-        pygame.draw.circle(screen, eye_color, left_eye, 4)
-        pygame.draw.circle(screen, eye_color, right_eye, 4)
+        # 已移除眼睛绘制（使用图片或方块作为视觉表现）
         
         if self.skill and not self.is_frozen:
             indicator_x = int(self.x + self.width // 2)
