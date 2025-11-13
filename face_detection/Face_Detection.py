@@ -22,6 +22,9 @@ except Exception:
 
 
 CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+# Tweakable detection parameters
+MIN_DETECTION_CONF = 0.35  # lower threshold for MediaPipe to be more sensitive
+
 
 
 def ensure_outputs_dir():
@@ -37,7 +40,7 @@ def capture_face_image(wait_seconds=3, label=None):
     face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
     if HAS_MEDIAPIPE:
-        mp_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+        mp_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=MIN_DETECTION_CONF)
     else:
         mp_detector = None
     print('Looking for faces. Press Ctrl+C to quit.')
@@ -46,14 +49,14 @@ def capture_face_image(wait_seconds=3, label=None):
     try:
         # stability tracking: keep recent centers
         recent_centers = []
-        stable_required = 10  # number of frames with low movement
-        movement_threshold = 6  # pixels
+        stable_required = 6  # fewer frames needed to consider stable (more responsive)
+        movement_threshold = 8  # pixels allowed movement (small hand jiggle allowed)
 
         # smoothing / hold parameters to avoid flicker when detection is intermittent
         last_box = None  # (x, y, w, h) last drawn box
         last_seen = 0
-        hold_frames = 6  # number of frames to keep showing last_box when detection is lost
-        smooth_alpha = 0.45  # smoothing factor (0=no smoothing, 1=jump to new box)
+        hold_frames = 8  # keep showing last_box briefly when detection is lost
+        smooth_alpha = 0.35  # smoothing factor (lower -> smoother)
 
         while True:
             ret, frame = cap.read()
@@ -80,7 +83,8 @@ def capture_face_image(wait_seconds=3, label=None):
                         faces.append((x, y, w, h))
             else:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+                # more sensitive Haar settings: smaller minSize, lower neighbors and finer scale
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(48, 48))
 
             display = frame.copy()
 
@@ -281,22 +285,24 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
     face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
     if HAS_MEDIAPIPE:
-        mp_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+        mp_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=MIN_DETECTION_CONF)
     else:
         mp_detector = None
     print('Looking for two faces. Press Ctrl+C to quit.')
 
     captured = None
     try:
-        recent_centers = []
-        stable_required = 10
-        movement_threshold = 6
+        # separate recent-center trackers for left and right faces
+        recent_left = []
+        recent_right = []
+        stable_required = 6  # require fewer frames so capture starts faster when both are still
+        movement_threshold = 8
 
         # smoothing/hold for two-face mode
-        last_boxes = None  # [(x1,y1,w1,h1),(x2,y2,w2,h2)]
+        last_boxes = None  # [(x_left,y_left,w_left,h_left),(x_right,y_right,w_right,h_right)]
         last_seen = 0
-        hold_frames = 6
-        smooth_alpha = 0.45
+        hold_frames = 10  # hold longer to avoid flicker
+        smooth_alpha = 0.30  # stronger smoothing (less jitter)
 
         while True:
             ret, frame = cap.read()
@@ -322,15 +328,16 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         faces.append((x, y, w, h))
             else:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
+                faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(48, 48)))
 
 
             if len(faces) >= 2:
-                # choose two largest faces
-                faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
-                (x1, y1, w1, h1), (x2, y2, w2, h2) = faces
+                # choose two largest faces by area, then assign left/right by x coordinate
+                top2 = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
+                top2 = sorted(top2, key=lambda r: r[0])  # sort by x: left, right
+                (x1, y1, w1, h1), (x2, y2, w2, h2) = top2
 
-                # smooth boxes if we have previous ones
+                # smooth boxes if we have previous ones (preserving left/right mapping)
                 if last_boxes is None:
                     sb1 = (x1, y1, w1, h1)
                     sb2 = (x2, y2, w2, h2)
@@ -356,20 +363,24 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                 
                 cx1, cy1 = x1 + w1 // 2, y1 + h1 // 2
                 cx2, cy2 = x2 + w2 // 2, y2 + h2 // 2
-                recent_centers.append(((cx1, cy1), (cx2, cy2)))
-                if len(recent_centers) > stable_required:
-                    recent_centers.pop(0)
+                # track separate recent trajectories for left and right faces
+                recent_left.append((cx1, cy1))
+                recent_right.append((cx2, cy2))
+                if len(recent_left) > stable_required:
+                    recent_left.pop(0)
+                if len(recent_right) > stable_required:
+                    recent_right.pop(0)
 
                 display = frame.copy()
                 cv2.rectangle(display, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
                 cv2.rectangle(display, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
 
                 stable1 = stable2 = False
-                if len(recent_centers) >= stable_required:
-                    xs1 = [c[0][0] for c in recent_centers]
-                    ys1 = [c[0][1] for c in recent_centers]
-                    xs2 = [c[1][0] for c in recent_centers]
-                    ys2 = [c[1][1] for c in recent_centers]
+                if len(recent_left) >= stable_required and len(recent_right) >= stable_required:
+                    xs1 = [c[0] for c in recent_left]
+                    ys1 = [c[1] for c in recent_left]
+                    xs2 = [c[0] for c in recent_right]
+                    ys2 = [c[1] for c in recent_right]
                     dx1 = max(xs1) - min(xs1)
                     dy1 = max(ys1) - min(ys1)
                     dx2 = max(xs2) - min(xs2)
