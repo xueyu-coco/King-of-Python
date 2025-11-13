@@ -148,8 +148,8 @@ def create_keyboard_platforms():
     platforms.append(KeyPlatform(420, 420, 80, 25, "S"))
     platforms.append(KeyPlatform(530, 420, 80, 25, "D"))
     
-    # Shift键 - 动态升降平台（左侧）
-    platforms.append(KeyPlatform(50, 280, 120, 25, "Shift", is_dynamic=True))
+    # Shift键 - 可断裂平台（左侧）
+    platforms.append(KeyPlatform(50, 280, 120, 25, "Shift", is_dynamic=False, is_breakable=True))
     
     # Tab键 - 高层平台
     platforms.append(KeyPlatform(620, 250, 100, 25, "Tab"))
@@ -255,11 +255,12 @@ def main():
             
             # 更新动态平台
             for platform in platforms:
-                platform.update()
+                platform.update(players=[player1, player2])
             
-            # 更新玩家
-            player1.update(keys, platforms)
-            player2.update(keys, platforms)
+            # 更新玩家（只使用未断裂的平台）
+            active_platforms = [p for p in platforms if not p.is_broken]
+            player1.update(keys, active_platforms)
+            player2.update(keys, active_platforms)
             
             check_player_collision(player1, player2)
             
