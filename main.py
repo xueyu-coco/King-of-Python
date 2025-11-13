@@ -9,6 +9,7 @@ from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
 from final.score import play_score_animation
+from Backround import backround_1
 
 try:
     HERE = os.path.dirname(__file__)
@@ -180,6 +181,13 @@ def main():
         except Exception:
             # if settings not available, ignore; errors will surface later
             pass
+    # initialize embedded background (safe: backround_1.init does not create a
+    # display; it only prepares streams and font). Requires pygame.init() above.
+    try:
+        backround_1.init(WIDTH, HEIGHT)
+    except Exception:
+        # if background fails, continue without it
+        pass
     
     while start:
         screen.fill(BG_COLOR)
@@ -270,6 +278,16 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.VIDEORESIZE:
+                # update the display surface and notify background of new size
+                try:
+                    screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                except Exception:
+                    pass
+                try:
+                    backround_1.handle_resize(event)
+                except Exception:
+                    pass
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
@@ -403,6 +421,13 @@ def main():
         
         # 绘制
         screen.fill(BG_COLOR)
+        # background (digital rain) - update & draw first so game objects overlay it
+        try:
+            backround_1.update(pygame.time.get_ticks())
+            backround_1.draw(screen)
+        except Exception:
+            # ignore background errors to avoid breaking the game
+            pass
         
         # 绘制所有键盘平台
         for platform in platforms:

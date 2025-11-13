@@ -9,14 +9,15 @@ import math
 cw, ch = 1200, 800
 screen = None
 
-# Color definitions (use a soft pastel palette for multicolor streams)
+# Color definitions: green-tone palette for matrix-like rain
+# Keep several green variants so streams vary while remaining green.
 PALETTE = [
-    (120, 200, 160),  # softened mint
-    (200, 120, 210),  # softened magenta
-    (110, 140, 240),  # softened blue
-    (245, 160, 110),  # softened orange
-    (150, 230, 150),  # softened green
-    (255, 140, 200),  # softened pink
+    (10, 180, 60),   # vivid green
+    (30, 160, 70),   # medium green
+    (40, 200, 90),   # bright green
+    (20, 120, 40),   # deep green
+    (100, 220, 130), # pastel green
+    (0, 200, 120),   # teal-ish green
 ]
 BLACK = (0, 0, 0)
 
