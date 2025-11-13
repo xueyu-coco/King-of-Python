@@ -30,7 +30,7 @@ def ensure_outputs_dir():
     return out_dir
 
 
-def capture_face_image(wait_seconds=3):
+def capture_face_image(wait_seconds=3, label=None):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError('Could not open camera')
@@ -114,16 +114,67 @@ def capture_face_image(wait_seconds=3):
                         overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2BGRA)
                     overlay[10:10+h0, 10:10+w0] = circ_np
                     display = cv2.cvtColor(overlay, cv2.COLOR_BGRA2BGR)
+                    # draw a label next to the preview (e.g. "Player 1 face")
+                    lab = (label + ' face') if label else 'Face'
+                    try:
+                        tx = 10 + w0 + 12
+                        ty = 30
+                        cv2.putText(display, lab, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
+                        cv2.putText(display, lab, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                    except Exception:
+                        pass
                 except Exception:
                     # fallback: just draw the rectangle if preview fails
-                    pass
+                    # still draw a simple label in top-left
+                    lab = (label + ' face') if label else 'Face'
+                    try:
+                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
+                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                    except Exception:
+                        pass
 
-                # only start countdown when stable
-                if stable:
+                # ensure the whole face bbox is fully inside the frame (not clipped)
+                margin = 5
+                fully_in_frame = (x > margin and y > margin and x + w < frame.shape[1] - margin and y + h < frame.shape[0] - margin)
+
+                # only start countdown when stable and fully inside the camera frame
+                if stable and fully_in_frame:
+                    # build a ready display without player labels (start from raw frame)
+                    try:
+                        disp_ready = frame.copy()
+                        cv2.rectangle(disp_ready, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        # paste circular preview if available
+                        try:
+                            overlay = disp_ready.copy()
+                            if overlay.shape[2] == 3:
+                                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2BGRA)
+                            overlay[10:10+h0, 10:10+w0] = circ_np
+                            disp_ready = cv2.cvtColor(overlay, cv2.COLOR_BGRA2BGR)
+                        except Exception:
+                            pass
+                        cx = frame.shape[1] // 2
+                        cy = frame.shape[0] // 2
+                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 6, cv2.LINE_AA)
+                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+                    except Exception:
+                        disp_ready = display.copy()
+
+                    cv2.imshow('Face Capture', disp_ready)
+                    if cv2.waitKey(1000) & 0xFF == 27:
+                        break
+
+                    # then perform a numeric countdown (wait_seconds seconds) showing large centered numbers
                     for s in range(wait_seconds, 0, -1):
-                        disp2 = display.copy()
-                        cv2.putText(disp2, f'Capturing in {s}s', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        cv2.imshow('Face (will capture)', disp2)
+                        try:
+                            disp2 = disp_ready.copy()
+                            cx = frame.shape[1] // 2
+                            cy = frame.shape[0] // 2
+                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 0, 0), 8, cv2.LINE_AA)
+                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 255, 0), 4, cv2.LINE_AA)
+                        except Exception:
+                            disp2 = display.copy()
+                            cv2.putText(disp2, f'Capturing in {s}s', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                        cv2.imshow('Face Capture', disp2)
                         if cv2.waitKey(1000) & 0xFF == 27:
                             break
 
@@ -134,12 +185,26 @@ def capture_face_image(wait_seconds=3):
                     break
 
                 else:
-                    # show the non-capturing display to user
-                    cv2.imshow('Face (waiting)', display)
+                    # show the non-capturing display to user (single window)
+                    # draw a simple label even when preview not present
+                    lab = (label + ' face') if label else 'Face'
+                    try:
+                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
+                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                    except Exception:
+                        pass
+                    cv2.imshow('Face Capture', display)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
-            cv2.imshow('Face (looking)', frame)
+            # show the general live camera frame in the same single window (with label)
+            try:
+                lab = (label + ' face') if label else 'Face'
+                cv2.putText(frame, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
+                cv2.putText(frame, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+            except Exception:
+                pass
+            cv2.imshow('Face Capture', frame)
             if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
                 break
     finally:
@@ -150,6 +215,191 @@ def capture_face_image(wait_seconds=3):
         raise RuntimeError('No frame captured')
 
     return captured, faces[0] if len(faces) > 0 else None
+
+
+def capture_two_faces(wait_seconds=3, label1=None, label2=None):
+    """Wait until two faces are detected, both stable and fully inside the frame,
+    then perform a countdown and capture a single frame. Returns (frame, [face1, face2]).
+    face entries are (x, y, w, h) for the two largest faces found.
+    """
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        raise RuntimeError('Could not open camera')
+    face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+
+    if HAS_MEDIAPIPE:
+        mp_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+    else:
+        mp_detector = None
+    print('Looking for two faces. Press Ctrl+C to quit.')
+
+    captured = None
+    try:
+        recent_centers = []
+        stable_required = 10
+        movement_threshold = 6
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                continue
+
+            if HAS_MEDIAPIPE and mp_detector is not None:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = mp_detector.process(rgb)
+                faces = []
+                if results.detections:
+                    for det in results.detections:
+                        bbox = det.location_data.relative_bounding_box
+                        x = int(bbox.xmin * frame.shape[1])
+                        y = int(bbox.ymin * frame.shape[0])
+                        w = int(bbox.width * frame.shape[1])
+                        h = int(bbox.height * frame.shape[0])
+                        faces.append((x, y, w, h))
+            else:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
+
+            if len(faces) >= 2:
+                # choose two largest faces
+                faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
+                (x1, y1, w1, h1), (x2, y2, w2, h2) = faces
+
+                cx1, cy1 = x1 + w1 // 2, y1 + h1 // 2
+                cx2, cy2 = x2 + w2 // 2, y2 + h2 // 2
+                recent_centers.append(((cx1, cy1), (cx2, cy2)))
+                if len(recent_centers) > stable_required:
+                    recent_centers.pop(0)
+
+                display = frame.copy()
+                cv2.rectangle(display, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
+                cv2.rectangle(display, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
+
+                stable1 = stable2 = False
+                if len(recent_centers) >= stable_required:
+                    xs1 = [c[0][0] for c in recent_centers]
+                    ys1 = [c[0][1] for c in recent_centers]
+                    xs2 = [c[1][0] for c in recent_centers]
+                    ys2 = [c[1][1] for c in recent_centers]
+                    dx1 = max(xs1) - min(xs1)
+                    dy1 = max(ys1) - min(ys1)
+                    dx2 = max(xs2) - min(xs2)
+                    dy2 = max(ys2) - min(ys2)
+                    if dx1 <= movement_threshold and dy1 <= movement_threshold:
+                        stable1 = True
+                    if dx2 <= movement_threshold and dy2 <= movement_threshold:
+                        stable2 = True
+
+                status_text = f"{'Stable' if (stable1 and stable2) else 'Hold still...'}"
+                color = (0, 255, 0) if (stable1 and stable2) else (0, 165, 255)
+                cv2.putText(display, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+
+                # show small previews and labels
+                try:
+                    crop1 = crop_to_face(frame, (x1, y1, w1, h1), pad=0.2)
+                    crop2 = crop_to_face(frame, (x2, y2, w2, h2), pad=0.2)
+                    p1 = Image.fromarray(cv2.cvtColor(crop1, cv2.COLOR_BGR2RGB))
+                    p2 = Image.fromarray(cv2.cvtColor(crop2, cv2.COLOR_BGR2RGB))
+                    c1 = circular_mask_image(p1).resize((100, 100))
+                    c2 = circular_mask_image(p2).resize((100, 100))
+                    c1_np = cv2.cvtColor(np.array(c1), cv2.COLOR_RGBA2BGRA)
+                    c2_np = cv2.cvtColor(np.array(c2), cv2.COLOR_RGBA2BGRA)
+                    # place them top-left and top-right
+                    if display.shape[2] == 3:
+                        display = cv2.cvtColor(display, cv2.COLOR_BGR2BGRA)
+                    h0, w0 = c1_np.shape[:2]
+                    display[10:10+h0, 10:10+w0] = c1_np
+                    display[10:10+h0, -10-w0:-10] = c2_np
+                    # labels
+                    lab1 = (label1 + ' face') if label1 else 'Player 1 face'
+                    lab2 = (label2 + ' face') if label2 else 'Player 2 face'
+                    cv2.putText(display, lab1, (10 + w0 + 10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 3, cv2.LINE_AA)
+                    cv2.putText(display, lab1, (10 + w0 + 10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1, cv2.LINE_AA)
+                    cv2.putText(display, lab2, (-10-w0-140, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 3, cv2.LINE_AA)
+                    cv2.putText(display, lab2, (-10-w0-140, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1, cv2.LINE_AA)
+                    display = cv2.cvtColor(display, cv2.COLOR_BGRA2BGR)
+                except Exception:
+                    pass
+
+                # ensure both faces fully in frame
+                margin = 5
+                fully1 = (x1 > margin and y1 > margin and x1 + w1 < frame.shape[1] - margin and y1 + h1 < frame.shape[0] - margin)
+                fully2 = (x2 > margin and y2 > margin and x2 + w2 < frame.shape[1] - margin and y2 + h2 < frame.shape[0] - margin)
+
+                if stable1 and stable2 and fully1 and fully2:
+                    # build a ready display from raw frame without player labels
+                    try:
+                        disp_ready = frame.copy()
+                        cv2.rectangle(disp_ready, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
+                        cv2.rectangle(disp_ready, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
+                        try:
+                            if disp_ready.shape[2] == 3:
+                                overlay = cv2.cvtColor(disp_ready.copy(), cv2.COLOR_BGR2BGRA)
+                            else:
+                                overlay = disp_ready.copy()
+                            overlay[10:10+h0, 10:10+w0] = c1_np
+                            overlay[10:10+h0, -10-w0:-10] = c2_np
+                            disp_ready = cv2.cvtColor(overlay, cv2.COLOR_BGRA2BGR)
+                        except Exception:
+                            pass
+                        cx = frame.shape[1] // 2
+                        cy = frame.shape[0] // 2
+                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 6, cv2.LINE_AA)
+                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+                    except Exception:
+                        disp_ready = display.copy()
+
+                    cv2.imshow('Face Capture', disp_ready)
+                    if cv2.waitKey(1000) & 0xFF == 27:
+                        break
+
+                    for s in range(wait_seconds, 0, -1):
+                        try:
+                            disp2 = disp_ready.copy()
+                            cx = frame.shape[1] // 2
+                            cy = frame.shape[0] // 2
+                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 0, 0), 8, cv2.LINE_AA)
+                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 255, 0), 4, cv2.LINE_AA)
+                        except Exception:
+                            disp2 = display.copy()
+                            cv2.putText(disp2, f'Capturing in {s}s', (10, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                        cv2.imshow('Face Capture', disp2)
+                        if cv2.waitKey(1000) & 0xFF == 27:
+                            break
+
+                    ret2, frame2 = cap.read()
+                    if ret2:
+                        captured = frame2
+                    break
+
+                else:
+                    cv2.imshow('Face Capture', display)
+                    if cv2.waitKey(1) & 0xFF == 27:
+                        break
+
+            # show live frame while waiting for two faces
+            try:
+                cv2.putText(frame, 'Waiting for 2 faces...', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200,200,200), 2)
+            except Exception:
+                pass
+            cv2.imshow('Face Capture', frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+
+    if captured is None:
+        raise RuntimeError('No frame captured')
+
+    # recompute faces on the captured frame to return accurate boxes
+    gray = cv2.cvtColor(captured, cv2.COLOR_BGR2GRAY)
+    faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
+    if len(faces) < 2:
+        # fallback: return the two previously found areas (best-effort)
+        return captured, []
+    faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
+    return captured, faces
 
 
 def crop_to_face(frame, face_rect, pad=0.4):

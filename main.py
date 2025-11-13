@@ -8,15 +8,23 @@ from entities.player import Player
 from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
+from face_detection.face_login_demo import capture_and_make_sprite
 
 try:
     HERE = os.path.dirname(__file__)
     REPO_ROOT = os.path.abspath(HERE)
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
-    from King_Monica.face_login_demo import capture_and_make_sprite
+    # try to import the batch two-face capture helper if available
+    from face_detection.face_login_demo import capture_two_and_make_sprites, capture_and_make_sprite
 except Exception:
-    capture_and_make_sprite = None
+    # fall back to single-capture function if batch isn't available
+    try:
+        from face_detection.face_login_demo import capture_and_make_sprite
+        capture_two_and_make_sprites = None
+    except Exception:
+        capture_and_make_sprite = None
+        capture_two_and_make_sprites = None
 
 
 
@@ -176,10 +184,21 @@ def main():
                 pygame.quit()
                 sys.exit()
             if ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_c and capture_and_make_sprite is not None:
-                    p1 = capture_and_make_sprite('Face1')
-                    time.sleep(1.0)
-                    p2 = capture_and_make_sprite('Face2')
+                if ev.key == pygame.K_c and (capture_two_and_make_sprites is not None or capture_and_make_sprite is not None):
+                    # Prefer a single-shot two-face capture if available
+                    if capture_two_and_make_sprites is not None:
+                        try:
+                            p1, p2 = capture_two_and_make_sprites('Face1', 'Face2')
+                        except Exception:
+                            # fallback to sequential captures if batch capture fails
+                            p1 = capture_and_make_sprite('Face1') if capture_and_make_sprite else None
+                            time.sleep(1.0)
+                            p2 = capture_and_make_sprite('Face2') if capture_and_make_sprite else None
+                    else:
+                        p1 = capture_and_make_sprite('Face1')
+                        time.sleep(1.0)
+                        p2 = capture_and_make_sprite('Face2')
+
                     local_p1 = load_avatar_surface(p1)
                     local_p2 = load_avatar_surface(p2)
                     start = False
