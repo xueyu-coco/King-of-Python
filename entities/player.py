@@ -6,8 +6,8 @@ class Player:
     def __init__(self, x, y, color, controls, facing_right=True):
         self.x = x
         self.y = y
-        self.width = 40
-        self.height = 60
+        self.width = 50
+        self.height = 75
         self.color = color
         self.vel_x = 0
         self.vel_y = 0
