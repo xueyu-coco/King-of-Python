@@ -347,8 +347,10 @@ def main():
                             player1.skill = bubble.type
                         elif bubble.type == 'ctrlc':
                             player1.freeze()
+                            player1.take_damage(3, 0)  # 捡到ctrl+c扣3点血
                         elif bubble.type == 'typeerror':
                             player1.reverse_controls()
+                            player1.take_damage(3, 0)  # 捡到typeerror扣3点血
                         bubbles.remove(bubble)
                         continue
 
@@ -357,8 +359,10 @@ def main():
                             player2.skill = bubble.type
                         elif bubble.type == 'ctrlc':
                             player2.freeze()
+                            player2.take_damage(3, 0)  # 捡到ctrl+c扣3点血
                         elif bubble.type == 'typeerror':
                             player2.reverse_controls()
+                            player2.take_damage(3, 0)  # 捡到typeerror扣3点血
                         bubbles.remove(bubble)
             
             # 检查游戏结束
