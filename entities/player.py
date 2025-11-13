@@ -4,10 +4,10 @@ import os
 from settings import *
 
 class Player:
-    def __init__(self, x, y, color, controls, facing_right=True):
+    def __init__(self, x, y, color, controls, facing_right=True, avatar=None):
         self.x = x
         self.y = y
-        self.width = 40
+        self.width = 60
         self.height = 60
         self.color = color
         self.vel_x = 0
@@ -80,6 +80,10 @@ class Player:
                 self.current_image = self.image1 or self.image2
         else:
             self.current_image = None
+
+        # 可选的头像（来自 face capture 或外部加载的 Surface）
+        self.avatar = avatar
+        self._cached_avatar = None
         
     def update(self, keys, platforms):
         # 更新反转状态
@@ -268,6 +272,21 @@ class Player:
                     else:
                         img = pygame.transform.flip(self.current_image, True, False)
                 screen.blit(img, (int(self.x), int(self.y)))
+                # 如果有头像，将头像居中绘制在frame中间
+                if self.avatar:
+                    aw, ah = self.avatar.get_size()
+                    max_w = int(self.width * 0.8)
+                    max_h = int(self.height * 0.8)
+                    scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
+                    new_w = max(1, int(aw * scale))
+                    new_h = max(1, int(ah * scale))
+                    try:
+                        avatar_surf = pygame.transform.smoothscale(self.avatar, (new_w, new_h))
+                    except Exception:
+                        avatar_surf = pygame.transform.scale(self.avatar, (new_w, new_h))
+                    ax = int(self.x + (self.width - avatar_surf.get_width()) / 2)
+                    ay = int(self.y + (self.height - avatar_surf.get_height()) / 2)
+                    screen.blit(avatar_surf, (ax, ay))
             else:
                 frozen_color = (
                     min(255, self.color[0] + 100),
@@ -311,8 +330,36 @@ class Player:
                     else:
                         img = pygame.transform.flip(self.current_image, True, False)
                 screen.blit(img, (int(self.x), int(self.y)))
+                if self.avatar:
+                    aw, ah = self.avatar.get_size()
+                    max_w = int(self.width * 0.8)
+                    max_h = int(self.height * 0.8)
+                    scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
+                    new_w = max(1, int(aw * scale))
+                    new_h = max(1, int(ah * scale))
+                    try:
+                        avatar_surf = pygame.transform.smoothscale(self.avatar, (new_w, new_h))
+                    except Exception:
+                        avatar_surf = pygame.transform.scale(self.avatar, (new_w, new_h))
+                    ax = int(self.x + (self.width - avatar_surf.get_width()) / 2)
+                    ay = int(self.y + (self.height - avatar_surf.get_height()) / 2)
+                    screen.blit(avatar_surf, (ax, ay))
             else:
                 pygame.draw.rect(screen, color, (int(self.x), int(self.y), self.width, self.height))
+                if self.avatar:
+                    aw, ah = self.avatar.get_size()
+                    max_w = int(self.width * 0.8)
+                    max_h = int(self.height * 0.8)
+                    scale = min(max_w / aw if aw else 1, max_h / ah if ah else 1, 1)
+                    new_w = max(1, int(aw * scale))
+                    new_h = max(1, int(ah * scale))
+                    try:
+                        avatar_surf = pygame.transform.smoothscale(self.avatar, (new_w, new_h))
+                    except Exception:
+                        avatar_surf = pygame.transform.scale(self.avatar, (new_w, new_h))
+                    ax = int(self.x + (self.width - avatar_surf.get_width()) / 2)
+                    ay = int(self.y + (self.height - avatar_surf.get_height()) / 2)
+                    screen.blit(avatar_surf, (ax, ay))
         
         # 已移除眼睛绘制（使用图片或方块作为视觉表现）
         
