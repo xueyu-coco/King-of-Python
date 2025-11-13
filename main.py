@@ -8,7 +8,7 @@ from entities.player import Player
 from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
-from face_detection.face_login_demo import capture_and_make_sprite
+from final.score import play_score_animation
 
 try:
     HERE = os.path.dirname(__file__)
@@ -169,6 +169,17 @@ def main():
     start = True
     local_p1 = None
     local_p2 = None
+    global screen
+    # if display was quit by external code (e.g. face capture), re-init it
+    if not pygame.get_init() or not pygame.display.get_init() or pygame.display.get_surface() is None:
+        pygame.init()
+        # recreate the screen surface from settings
+        try:
+            screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            pygame.display.set_caption("King of Python - The Great Keyboard")
+        except Exception:
+            # if settings not available, ignore; errors will surface later
+            pass
     
     while start:
         screen.fill(BG_COLOR)
@@ -189,15 +200,31 @@ def main():
                     if capture_two_and_make_sprites is not None:
                         try:
                             p1, p2 = capture_two_and_make_sprites('Face1', 'Face2')
+                        except KeyboardInterrupt:
+                            # user aborted capture (Ctrl+C) - skip avatar capture
+                            p1 = None
+                            p2 = None
                         except Exception:
                             # fallback to sequential captures if batch capture fails
-                            p1 = capture_and_make_sprite('Face1') if capture_and_make_sprite else None
+                            try:
+                                p1 = capture_and_make_sprite('Face1') if capture_and_make_sprite else None
+                            except Exception:
+                                p1 = None
                             time.sleep(1.0)
-                            p2 = capture_and_make_sprite('Face2') if capture_and_make_sprite else None
+                            try:
+                                p2 = capture_and_make_sprite('Face2') if capture_and_make_sprite else None
+                            except Exception:
+                                p2 = None
                     else:
-                        p1 = capture_and_make_sprite('Face1')
+                        try:
+                            p1 = capture_and_make_sprite('Face1')
+                        except Exception:
+                            p1 = None
                         time.sleep(1.0)
-                        p2 = capture_and_make_sprite('Face2')
+                        try:
+                            p2 = capture_and_make_sprite('Face2')
+                        except Exception:
+                            p2 = None
 
                     local_p1 = load_avatar_surface(p1)
                     local_p2 = load_avatar_surface(p2)
@@ -232,6 +259,7 @@ def main():
     running = True
     game_over = False
     winner = None
+    score_shown = False
     
     last_p1_skill = None
     last_p2_skill = None
@@ -397,6 +425,13 @@ def main():
         
         # 游戏结束画面
         if game_over:
+            if not score_shown:
+                # determine winner and loser objects
+                if winner == "PLAYER 1":
+                    play_score_animation(screen, player1, player2, winner_avatar=local_p1)
+                else:
+                    play_score_animation(screen, player2, player1, winner_avatar=local_p2)
+                score_shown = True
             overlay = pygame.Surface((WIDTH, HEIGHT))
             overlay.set_alpha(200)
             overlay.fill(BLACK)
