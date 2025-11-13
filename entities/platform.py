@@ -19,9 +19,9 @@ class KeyPlatform:
         self.is_breakable = is_breakable
         self.is_broken = False
         self.break_timer = 0  # 站在上面的计时
-        self.break_threshold = 180  # 3秒 = 180帧
+        self.break_threshold = 1  # 立即断裂 = 1帧
         self.respawn_timer = 0  # 重生计时
-        self.respawn_time = 60  # 1秒 = 60帧
+        self.respawn_time = 180  # 3秒 = 180帧
         self.player_on_platform = False
         
     def update(self, players=None):
