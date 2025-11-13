@@ -143,24 +143,24 @@ def create_keyboard_platforms():
     platforms = []
     
     # SPACE键 - 最底部的主平台（超长）
-    platforms.append(KeyPlatform(50, HEIGHT - 80, 700, 30, "SPACE"))
+    platforms.append(KeyPlatform(75, HEIGHT - 100, 1050, 38, "SPACE"))
     
     # QWER 行 - 中层平台
-    platforms.append(KeyPlatform(100, 350, 80, 25, "Q"))
-    platforms.append(KeyPlatform(220, 350, 80, 25, "W"))
-    platforms.append(KeyPlatform(340, 350, 80, 25, "E"))
-    platforms.append(KeyPlatform(580, 350, 80, 25, "R"))
+    platforms.append(KeyPlatform(150, 470, 100, 32, "Q"))
+    platforms.append(KeyPlatform(330, 470, 100, 32, "W"))
+    platforms.append(KeyPlatform(510, 470, 100, 32, "E"))
+    platforms.append(KeyPlatform(870, 470, 100, 32, "R"))
     
     # ASD 行 - 较低层
-    platforms.append(KeyPlatform(150, 420, 80, 25, "A"))
-    platforms.append(KeyPlatform(420, 420, 80, 25, "S"))
-    platforms.append(KeyPlatform(530, 420, 80, 25, "D"))
+    platforms.append(KeyPlatform(225, 560, 100, 32, "A"))
+    platforms.append(KeyPlatform(630, 560, 100, 32, "S"))
+    platforms.append(KeyPlatform(795, 560, 100, 32, "D"))
     
     # Shift键 - 可断裂平台（左侧）
-    platforms.append(KeyPlatform(50, 280, 120, 25, "Shift", is_dynamic=True, is_breakable=True))
+    platforms.append(KeyPlatform(75, 375, 150, 32, "Shift", is_dynamic=True, is_breakable=True))
     
     # Tab键 - 高层平台
-    platforms.append(KeyPlatform(620, 250, 100, 25, "Tab"))
+    platforms.append(KeyPlatform(930, 335, 125, 32, "Tab"))
     
     return platforms
 
