@@ -157,7 +157,7 @@ def create_keyboard_platforms():
     platforms.append(KeyPlatform(530, 420, 80, 25, "D"))
     
     # Shift键 - 可断裂平台（左侧）
-    platforms.append(KeyPlatform(50, 280, 120, 25, "Shift", is_dynamic=False, is_breakable=True))
+    platforms.append(KeyPlatform(50, 280, 120, 25, "Shift", is_dynamic=True, is_breakable=True))
     
     # Tab键 - 高层平台
     platforms.append(KeyPlatform(620, 250, 100, 25, "Tab"))

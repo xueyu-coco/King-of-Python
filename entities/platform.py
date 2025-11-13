@@ -19,14 +19,14 @@ class KeyPlatform:
         self.is_breakable = is_breakable
         self.is_broken = False
         self.break_timer = 0  # 站在上面的计时
-        self.break_threshold = 30  # 0.5秒 = 30帧
+        self.break_threshold = 180  # 3秒 = 180帧
         self.respawn_timer = 0  # 重生计时
         self.respawn_time = 60  # 1秒 = 60帧
         self.player_on_platform = False
         
     def update(self, players=None):
         """更新动态平台位置和断裂状态"""
-        # 动态移动
+        # 动态移动（即使可以断裂也能移动）
         if self.is_dynamic and not self.is_broken:
             self.y += self.move_speed * self.move_direction
             
@@ -45,6 +45,8 @@ class KeyPlatform:
                     self.is_broken = False
                     self.break_timer = 0
                     self.respawn_timer = 0
+                    # 重生时恢复到基准位置
+                    self.y = self.base_y
             else:
                 # 检测是否有玩家站在上面
                 self.player_on_platform = False
@@ -93,21 +95,35 @@ class KeyPlatform:
                          self.width, self.height))
         
         # 绘制按键顶面
-        if self.is_dynamic:
-            # Shift键用特殊颜色
-            key_color = (200, 220, 255)
-        else:
-            key_color = KEY_COLOR
-        
-        # 如果是可断裂的，根据破损程度改变颜色
-        if self.is_breakable:
+        # 优先判断是否动态+可断裂（Shift键）
+        if self.is_dynamic and self.is_breakable:
+            # Shift键：冰蓝色基础，根据破损程度变化
             damage_ratio = self.break_timer / self.break_threshold
             if damage_ratio > 0:
-                # 颜色从浅蓝逐渐变暗变红
+                # 从冰蓝色逐渐变红
+                r = int(200 + damage_ratio * 55)
+                g = int(220 - damage_ratio * 100)
+                b = int(255 - damage_ratio * 55)  # 保持较高的蓝色值
+                key_color = (r, g, b)
+            else:
+                # 完好状态：冰蓝色
+                key_color = (200, 220, 255)
+        elif self.is_dynamic:
+            # 仅动态平台：浅蓝色
+            key_color = (200, 220, 255)
+        elif self.is_breakable:
+            # 仅可断裂平台
+            damage_ratio = self.break_timer / self.break_threshold
+            if damage_ratio > 0:
                 r = int(200 + damage_ratio * 55)
                 g = int(220 - damage_ratio * 100)
                 b = int(255 - damage_ratio * 155)
                 key_color = (r, g, b)
+            else:
+                key_color = KEY_COLOR
+        else:
+            # 普通平台
+            key_color = KEY_COLOR
             
         pygame.draw.rect(screen, key_color, 
                         (self.x, self.y, self.width, self.height))
@@ -206,8 +222,8 @@ class KeyPlatform:
             piece_surface = pygame.Surface((self.width, self.height))
             piece_surface.set_alpha(alpha)
             
-            # 绘制几个分散的碎片
-            piece_color = (150, 150, 180)
+            # 绘制几个分散的碎片（冰蓝色）
+            piece_color = (180, 200, 235)  # 冰蓝色碎片
             piece_width = self.width // 3
             piece_height = self.height // 2
             
@@ -230,7 +246,7 @@ class KeyPlatform:
         
         # 显示重生倒计时
         if self.respawn_timer > 0:
-            respawn_text = font_tiny.render("Respawning...", True, GRAY)
+            respawn_text = font_tiny.render("Respawning...", True, CYAN)
             text_rect = respawn_text.get_rect(
                 center=(self.x + self.width//2, self.y + self.height//2)
             )
