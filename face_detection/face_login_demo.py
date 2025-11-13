@@ -6,18 +6,28 @@ import cv2
 from PIL import Image
 
 # Ensure repo root is on sys.path so package imports work when this file
-# is executed directly (python King_Monica/face_login_demo.py) from the repo root.
+# is executed directly (python face_detection/face_login_demo.py) from the repo root.
 HERE = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(HERE, os.pardir))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from King_Monica.Face_Detection import capture_face_image, crop_to_face, circular_mask_image, ensure_outputs_dir  # noqa: E402
-
+from face_detection.Face_Detection import capture_face_image, crop_to_face, circular_mask_image, ensure_outputs_dir  # noqa: E402
 
 def capture_and_make_sprite(player_label, palette_mode='cute'):
     print(f'Please position {player_label} in front of the camera...')
-    frame, face = capture_face_image(wait_seconds=3)
+    # derive a nicer display label for the capture window (show "Player 1 face" / "Player 2 face")
+    if '1' in player_label:
+        display_label = 'Player 1'
+    elif '2' in player_label:
+        display_label = 'Player 2'
+    else:
+        display_label = player_label
+
+    # give the user a short pause to get ready before the detection begins
+    print(f'Starting capture for {display_label} in 5 seconds...')
+    time.sleep(5)
+    frame, face = capture_face_image(wait_seconds=3, label=display_label)
     if face is None:
         raise RuntimeError('No face captured')
     crop = crop_to_face(frame, face, pad=0.5)
@@ -34,6 +44,51 @@ def capture_and_make_sprite(player_label, palette_mode='cute'):
     avatar_path = os.path.join(out_dir, f'{player_label}_avatar_{ts}.png')
     circ.save(avatar_path)
     return avatar_path
+
+
+def capture_two_and_make_sprites(label1='Face1', label2='Face2', palette_mode='cute'):
+    """Capture two faces in one session and save two avatar files.
+    Returns (path1, path2).
+    """
+    # derive nicer display labels
+    if '1' in label1:
+        display1 = 'Player 1'
+    else:
+        display1 = label1
+    if '2' in label2:
+        display2 = 'Player 2'
+    else:
+        display2 = label2
+
+    from face_detection.Face_Detection import capture_two_faces, crop_to_face, circular_mask_image, ensure_outputs_dir  # noqa: E402
+
+    frame, faces = capture_two_faces(wait_seconds=3, label1=display1, label2=display2)
+    if not faces or len(faces) < 2:
+        raise RuntimeError('Failed to detect two faces')
+
+    out_dir = ensure_outputs_dir()
+    ts = int(time.time())
+
+    # ensure consistent ordering: left face -> player1, right face -> player2
+    faces_sorted = sorted(faces, key=lambda r: r[0])
+    (x1, y1, w1, h1), (x2, y2, w2, h2) = faces_sorted
+
+    # crop and save both
+    crop1 = crop_to_face(frame, (x1, y1, w1, h1), pad=0.5)
+    crop2 = crop_to_face(frame, (x2, y2, w2, h2), pad=0.5)
+
+    pil1 = Image.fromarray(cv2.cvtColor(crop1, cv2.COLOR_BGR2RGB))
+    pil2 = Image.fromarray(cv2.cvtColor(crop2, cv2.COLOR_BGR2RGB))
+
+    circ1 = circular_mask_image(pil1)
+    circ2 = circular_mask_image(pil2)
+
+    p1_path = os.path.join(out_dir, f'{label1}_avatar_{ts}.png')
+    p2_path = os.path.join(out_dir, f'{label2}_avatar_{ts}.png')
+    circ1.save(p1_path)
+    circ2.save(p2_path)
+
+    return p1_path, p2_path
 
 
 def run_login_and_demo():

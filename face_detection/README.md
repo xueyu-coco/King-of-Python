@@ -6,5 +6,5 @@ Run (after creating and activating the virtualenv):
 
 ```bash
 pip install -r ../requirements.txt
-python -m King_Monica.main
+python -m face_detection.main
 ```
