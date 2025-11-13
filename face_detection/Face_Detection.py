@@ -59,6 +59,11 @@ def capture_face_image(wait_seconds=3, label=None):
             ret, frame = cap.read()
             if not ret:
                 continue
+            # mirror frame for selfie view
+            try:
+                frame = cv2.flip(frame, 1)
+            except Exception:
+                pass
 
             if HAS_MEDIAPIPE and mp_detector is not None:
                 # MediaPipe expects RGB
@@ -206,6 +211,10 @@ def capture_face_image(wait_seconds=3, label=None):
                     # take one more frame as capture
                     ret2, frame2 = cap.read()
                     if ret2:
+                        try:
+                            frame2 = cv2.flip(frame2, 1)
+                        except Exception:
+                            pass
                         captured = frame2
                     break
 
@@ -293,6 +302,11 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
             ret, frame = cap.read()
             if not ret:
                 continue
+            # mirror frame for selfie view
+            try:
+                frame = cv2.flip(frame, 1)
+            except Exception:
+                pass
 
             if HAS_MEDIAPIPE and mp_detector is not None:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -444,6 +458,10 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
 
                     ret2, frame2 = cap.read()
                     if ret2:
+                        try:
+                            frame2 = cv2.flip(frame2, 1)
+                        except Exception:
+                            pass
                         captured = frame2
                     break
 
