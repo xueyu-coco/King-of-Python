@@ -86,9 +86,9 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name1 = "PLAYER 1"
-    p1_text = font_small.render(name1, True, player1.color)
+    p1_text = font_tiny.render(name1, True, player1.color)
     if p1_text.get_width() > hp_bar_width:
-        small_font = pygame.font.Font(None, 20)
+        small_font = pygame.font.Font(FONT_PATH, 18)
         p1_text = small_font.render(name1, True, player1.color)
     p1_text_rect = p1_text.get_rect(center=(p1_x + hp_bar_width // 2, hp_bar_y - 12))
     screen.blit(p1_text, p1_text_rect)
@@ -114,9 +114,9 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name2 = "PLAYER 2"
-    p2_text = font_small.render(name2, True, player2.color)
+    p2_text = font_tiny.render(name2, True, player2.color)
     if p2_text.get_width() > hp_bar_width:
-        small_font = pygame.font.Font(None, 20)
+        small_font = pygame.font.Font(FONT_PATH, 18)
         p2_text = small_font.render(name2, True, player2.color)
     p2_text_rect = p2_text.get_rect(center=(p2_x + hp_bar_width // 2, hp_bar_y - 12))
     screen.blit(p2_text, p2_text_rect)
@@ -132,12 +132,14 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
             ay = 8
         screen.blit(p2_avatar, (ax, ay))
     
-    # 技能说明 - 移到 SPACE 平台下方，水平排列
+    # 技能说明 - 移到 SPACE 平台下方，水平排列，居中显示
     # SPACE 平台位置：(75, HEIGHT - 100, 1050, 38)
     space_bottom = HEIGHT - 100 + 38
-    info_y = space_bottom + 15  # SPACE 平台下方 15 像素
+    # 计算SPACE平台底部到屏幕底部的距离，将技能说明放在中间偏上
+    remaining_space = HEIGHT - space_bottom
+    info_y = space_bottom + remaining_space // 3  # 在剩余空间的1/3位置
     
-    # 计算技能说明的总宽度，平均分布
+    # 技能说明列表
     skill_infos = [
         ("pow(): Attack 8HP", ORANGE),
         ("delete: Remove skill", RED),
@@ -146,28 +148,50 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
         ("TypeError: Reverse 10s", DARK_RED)
     ]
     
-    # 计算每个技能说明的宽度
-    total_width = 1050  # SPACE 平台宽度
-    start_x = 75  # SPACE 平台起始 x
-    spacing = total_width / len(skill_infos)
+    # 计算每个技能说明的实际宽度
+    icon_radius = 6
+    icon_text_gap = 10  # 图标和文字之间的间距
+    skill_item_spacing = 20  # 技能之间的间距
     
-    for i, (text, color) in enumerate(skill_infos):
-        # 计算每个技能的中心位置
-        x_pos = start_x + spacing * i + spacing / 2
-        
+    # 预渲染所有文字，计算总宽度
+    rendered_texts = []
+    total_content_width = 0
+    for text, color in skill_infos:
+        skill_text = font_tiny.render(text, True, WHITE)
+        text_width = skill_text.get_width()
+        item_width = icon_radius * 2 + icon_text_gap + text_width
+        rendered_texts.append((skill_text, text_width))
+        total_content_width += item_width
+    
+    # 加上技能之间的间距
+    total_content_width += skill_item_spacing * (len(skill_infos) - 1)
+    
+    # 计算起始x坐标，使整体居中
+    start_x = (WIDTH - total_content_width) / 2
+    
+    # 绘制每个技能说明
+    current_x = start_x
+    for i, ((text, color), (skill_text, text_width)) in enumerate(zip(skill_infos, rendered_texts)):
         # 绘制彩色圆点作为图标
-        icon_radius = 6
-        pygame.draw.circle(screen, color, (int(x_pos - 40), int(info_y + 8)), icon_radius)
+        icon_x = int(current_x + icon_radius)
+        icon_y = int(info_y + 8)
+        pygame.draw.circle(screen, color, (icon_x, icon_y), icon_radius)
         
         # 绘制技能文字
-        skill_text = font_tiny.render(text, True, WHITE)
-        text_rect = skill_text.get_rect(midleft=(int(x_pos - 30), int(info_y + 8)))
+        text_x = int(current_x + icon_radius * 2 + icon_text_gap)
+        text_y = int(info_y + 8)
         
         # 添加文字阴影增强可读性
         shadow_text = font_tiny.render(text, True, BLACK)
-        shadow_rect = shadow_text.get_rect(midleft=(int(x_pos - 29), int(info_y + 9)))
+        shadow_rect = shadow_text.get_rect(midleft=(text_x + 1, text_y + 1))
         screen.blit(shadow_text, shadow_rect)
+        
+        # 绘制主文字
+        text_rect = skill_text.get_rect(midleft=(text_x, text_y))
         screen.blit(skill_text, text_rect)
+        
+        # 移动到下一个技能的位置
+        current_x += icon_radius * 2 + icon_text_gap + text_width + skill_item_spacing
 
 def create_keyboard_platforms():
     """创建键盘主题的平台布局"""
@@ -176,22 +200,22 @@ def create_keyboard_platforms():
     # SPACE键 - 最底部的主平台（超长）
     platforms.append(KeyPlatform(75, HEIGHT - 100, 1050, 38, "SPACE"))
     
-    # QWER 行 - 中层平台
-    platforms.append(KeyPlatform(150, 470, 100, 32, "Q"))
-    platforms.append(KeyPlatform(330, 470, 100, 32, "W"))
-    platforms.append(KeyPlatform(510, 470, 100, 32, "E"))
-    platforms.append(KeyPlatform(870, 470, 100, 32, "R"))
+    # QWER 行 - 中层平台（调整位置，增加横向和纵向间距）
+    platforms.append(KeyPlatform(280, 480, 100, 32, "Q"))
+    platforms.append(KeyPlatform(400, 410, 100, 32, "W"))
+    platforms.append(KeyPlatform(580, 485, 100, 32, "E"))
+    platforms.append(KeyPlatform(920, 465, 100, 32, "R"))
     
-    # ASD 行 - 较低层
-    platforms.append(KeyPlatform(225, 560, 100, 32, "A"))
-    platforms.append(KeyPlatform(630, 560, 100, 32, "S"))
-    platforms.append(KeyPlatform(795, 560, 100, 32, "D"))
+    # ASD 行 - 较低层（调整位置，增加间距）
+    platforms.append(KeyPlatform(150, 580, 100, 32, "A"))
+    platforms.append(KeyPlatform(680, 570, 100, 32, "S"))
+    platforms.append(KeyPlatform(850, 590, 100, 32, "D"))
     
-    # Shift键 - 可断裂平台（左侧）
-    platforms.append(KeyPlatform(75, 375, 150, 32, "Shift", is_dynamic=True, is_breakable=True))
+    # Shift键 - 可断裂平台（左侧，位置调整避免正好被Q接住）
+    platforms.append(KeyPlatform(75, 360, 100, 32, "Shift", is_dynamic=True, is_breakable=True))
     
     # Tab键 - 高层平台
-    platforms.append(KeyPlatform(930, 335, 125, 32, "Tab"))
+    platforms.append(KeyPlatform(950, 320, 125, 32, "Tab"))
     
     return platforms
 
