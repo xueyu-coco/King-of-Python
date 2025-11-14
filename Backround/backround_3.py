@@ -1,8 +1,6 @@
 import pygame
 import random
 import math
-import os
-import glob
 
 # NOTE: This module used to initialize Pygame and create a display at import time.
 # That caused import-time side effects. Make the module import-safe by deferring
@@ -12,26 +10,20 @@ import glob
 # Window size defaults (can be overridden by init or set_surface)
 cw, ch = 1200, 800
 screen = None  # rendering target surface (set by init(create_display=True) or set_surface)
-bg_surface = None  # internal transparent surface we draw the streams onto
 
 # Global alpha scale for the streams (0.0 - 1.0). Lower to make streams more transparent.
-ALPHA_SCALE = 0.65  # lower alpha to make purples more transparent (user requested)
+ALPHA_SCALE = 0.6
 
-# Color definitions: boosted vivid palette — purples are brighter and more saturated
+# Color definitions (use a soft pastel palette for multicolor streams)
 PALETTE = [
-    (200,  80, 255),  # shift slightly toward blue (less red)
-    (200,  90, 230),  # magenta -> cooler magenta with more blue
-    (255, 120, 180),  # brighter pink (keep)
-    (100, 220, 200),  # pastel aqua (keep)
-    (120, 240, 180),  # pastel mint (keep)
-    (220, 160, 255),  # vivid lavender (slightly cooler)
+    (120, 200, 160),  # softened mint
+    (200, 120, 210),  # softened magenta
+    (110, 140, 240),  # softened blue
+    (245, 160, 110),  # softened orange
+    (150, 230, 150),  # softened green
+    (255, 140, 200),  # softened pink
 ]
 BLACK = (0, 0, 0)
-
-# Font tint colors (primary and head) to give characters a cute purple look
-# Increase purple brightness/saturation for character tinting
-FONT_TINT = (200, 40, 255)    # lean slightly blue (reduce red component)
-FONT_HEAD_TINT = (200, 200, 255)  # head tint shifted slightly blue
 
 # Character array - includes digits and uppercase letters similar to the reference image
 char_arr = list("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -50,7 +42,6 @@ SCALE_MAX = 1.40
 # Compute number of columns
 columns = cw // font_size
 module_font = None
-module_is_pixel_font = False
 
 class CharStream:
     def __init__(self, column):
@@ -102,30 +93,21 @@ class CharStream:
         # no blinking bright character logic
     
     def draw(self, screen, font):
-        global module_is_pixel_font
         for i, char in enumerate(self.chars):
             # Character color gradient - head is brightest, tail fades
             if char['bright']:
-                # head uses a tint towards FONT_HEAD_TINT for a cute purple head
-                color = FONT_HEAD_TINT
+                # head uses a much brighter version of the stream base color
+                color = tuple(min(255, c + 120) for c in self.base_color)
                 # brighter head alpha
-                alpha = 245
+                alpha = 230
             else:
                 # Compute brightness based on position in the stream; top characters are brighter
                 raw = 1.0 - (i / self.stream_length)
                 brightness = max(0.15, 0.95 * raw)
-                # base color contribution
-                base_col = (
+                color = (
                     int(self.base_color[0] * brightness),
                     int(self.base_color[1] * brightness),
                     int(self.base_color[2] * brightness)
-                )
-                # blend base color with FONT_TINT to bias characters toward purple
-                blend = 0.75
-                color = (
-                    int(base_col[0] * (1 - blend) + FONT_TINT[0] * blend),
-                    int(base_col[1] * (1 - blend) + FONT_TINT[1] * blend),
-                    int(base_col[2] * (1 - blend) + FONT_TINT[2] * blend),
                 )
                 # overall alpha scaled by brightness (make slightly stronger)
                 alpha = int(245 * brightness)
@@ -141,11 +123,7 @@ class CharStream:
 
                 # prepare scaled surfaces for base, outline and glow
                 try:
-                    # prefer nearest-neighbor scaling for pixel fonts to keep blocky look
-                    if module_is_pixel_font:
-                        base_scaled = pygame.transform.scale(text_surf, (sw, sh)) if (sw != text_surf.get_width() or sh != text_surf.get_height()) else text_surf
-                    else:
-                        base_scaled = pygame.transform.smoothscale(text_surf, (sw, sh)) if (sw != text_surf.get_width() or sh != text_surf.get_height()) else text_surf
+                    base_scaled = pygame.transform.smoothscale(text_surf, (sw, sh)) if (sw != text_surf.get_width() or sh != text_surf.get_height()) else text_surf
                 except Exception:
                     base_scaled = pygame.transform.scale(text_surf, (sw, sh)) if (sw != text_surf.get_width() or sh != text_surf.get_height()) else text_surf
 
@@ -191,13 +169,6 @@ def handle_resize(event):
     else:
         return
     columns = cw // font_size
-    # recreate internal bg surface to match new size (if created)
-    global bg_surface
-    try:
-        if screen is not None:
-            bg_surface = pygame.Surface((cw, ch), pygame.SRCALPHA)
-    except Exception:
-        bg_surface = None
     create_streams()
 
 
@@ -237,12 +208,6 @@ def set_surface(surface):
     except Exception:
         # surface may not be a pygame Surface; ignore size update if so
         pass
-    # create an internal transparent surface that we'll blit onto the target
-    global bg_surface
-    try:
-        bg_surface = pygame.Surface((cw, ch), pygame.SRCALPHA)
-    except Exception:
-        bg_surface = None
     create_streams()
 
 def main():
@@ -284,20 +249,10 @@ def main():
         # Clear screen each frame (no motion trail)
         screen_local.fill(BLACK)
 
-        # Update streams and draw them onto an internal transparent surface,
-        # then blit that surface onto the screen so the background has a
-        # transparent base (only characters are opaque)
+        # Update and draw all streams
         for stream in char_streams:
             stream.update(current_time)
-        # draw to internal bg surface if available
-        if bg_surface is not None:
-            bg_surface.fill((0, 0, 0, 0))
-            for stream in char_streams:
-                stream.draw(bg_surface, font)
-            screen_local.blit(bg_surface, (0, 0))
-        else:
-            for stream in char_streams:
-                stream.draw(screen_local, font)
+            stream.draw(screen_local, font)
 
         # Randomly add new streams
         if len(char_streams) < max_char_count and random.random() < 0.02:
@@ -341,53 +296,19 @@ def draw(surface=None):
     This will lazily create a module font if needed.
     """
     global module_font
-    global module_is_pixel_font
     if surface is None:
         surface = screen
     if surface is None:
         return
 
     if module_font is None:
-        # Try to load a bundled pixel font (ark-pixel) from the project's fonts/
-        try:
-            fonts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fonts'))
-            candidates = glob.glob(os.path.join(fonts_dir, 'ark-pixel-12px-proportional-*.otf'))
-            chosen = None
-            if candidates:
-                # prefer latin variant for ASCII; otherwise pick first
-                for p in candidates:
-                    if 'latin' in os.path.basename(p).lower():
-                        chosen = p
-                        break
-                if chosen is None:
-                    chosen = candidates[0]
-                module_font = pygame.font.Font(chosen, font_size)
-                module_is_pixel_font = True
-        except Exception:
-            module_font = None
-
-    if module_font is None:
         try:
             module_font = pygame.font.SysFont('couriernew', font_size, bold=True)
-            module_is_pixel_font = False
         except Exception:
+            # fallback to default font
             module_font = pygame.font.Font(None, font_size)
-            module_is_pixel_font = False
 
-    # draw into an internal transparent surface then blit so the background
-    # is effectively transparent where no characters are drawn
-    global bg_surface
-    if bg_surface is not None:
-        try:
-            bg_surface.fill((0, 0, 0, 0))
-            for stream in char_streams:
-                stream.draw(bg_surface, module_font)
-            surface.blit(bg_surface, (0, 0))
-            return
-        except Exception:
-            pass
-
-    # fallback: draw directly onto the provided surface
+    # clear area where background draws? caller usually clears screen
     for stream in char_streams:
         stream.draw(surface, module_font)
 
