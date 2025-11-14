@@ -1,4 +1,6 @@
 import pygame
+import random
+import math
 from settings import *
 
 class KeyPlatform:
@@ -24,6 +26,9 @@ class KeyPlatform:
         self.respawn_time = 180  # 3秒 = 180帧
         self.player_on_platform = False
         
+        # 冰块碎片系统
+        self.ice_shards = []
+        
     def update(self, players=None):
         """更新动态平台位置和断裂状态"""
         # 动态移动（即使可以断裂也能移动）
@@ -39,12 +44,25 @@ class KeyPlatform:
         # 断裂机制
         if self.is_breakable:
             if self.is_broken:
+                # 更新冰块碎片
+                for shard in self.ice_shards[:]:
+                    shard['x'] += shard['vx']
+                    shard['y'] += shard['vy']
+                    shard['vy'] += 0.5  # 重力
+                    shard['rotation'] += shard['rot_speed']
+                    shard['alpha'] -= 3  # 淡出
+                    
+                    # 移除完全透明或掉出屏幕的碎片
+                    if shard['alpha'] <= 0 or shard['y'] > HEIGHT + 50:
+                        self.ice_shards.remove(shard)
+                
                 # 重生倒计时
                 self.respawn_timer += 1
                 if self.respawn_timer >= self.respawn_time:
                     self.is_broken = False
                     self.break_timer = 0
                     self.respawn_timer = 0
+                    self.ice_shards.clear()
                     # 重生时恢复到基准位置
                     self.y = self.base_y
             else:
@@ -55,19 +73,58 @@ class KeyPlatform:
                         if self.check_player_standing(player):
                             self.player_on_platform = True
                             self.break_timer += 1
-                            # 立即断裂，不等待
+                            # 立即断裂
                             if self.break_timer > self.break_threshold:
                                 self.is_broken = True
                                 self.break_timer = 0
+                                self._create_ice_shards()
                             break
                 
                 # 如果没有玩家，重置计时
                 if not self.player_on_platform:
                     self.break_timer = 0
     
+    def _create_ice_shards(self):
+        """创建冰块碎片"""
+        self.ice_shards.clear()
+        
+        # 创建多个不规则冰块碎片
+        num_shards = 12
+        for i in range(num_shards):
+            # 随机大小和位置
+            shard_w = random.randint(int(self.width * 0.15), int(self.width * 0.3))
+            shard_h = random.randint(int(self.height * 0.4), int(self.height * 0.8))
+            
+            # 起始位置在平台范围内
+            start_x = self.x + random.uniform(0, self.width - shard_w)
+            start_y = self.y + random.uniform(0, self.height - shard_h)
+            
+            # 随机速度（向外爆炸效果）
+            center_x = self.x + self.width / 2
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(2, 6)
+            
+            shard = {
+                'x': start_x,
+                'y': start_y,
+                'w': shard_w,
+                'h': shard_h,
+                'vx': math.cos(angle) * speed,
+                'vy': -random.uniform(3, 8),  # 向上弹起
+                'rotation': random.uniform(0, 360),
+                'rot_speed': random.uniform(-15, 15),
+                'alpha': 255,
+                'color': random.choice([
+                    (180, 220, 255),  # 冰蓝
+                    (200, 230, 255),  # 浅冰蓝
+                    (160, 200, 245),  # 深冰蓝
+                    (220, 240, 255),  # 极浅冰蓝
+                ])
+            }
+            self.ice_shards.append(shard)
+    
     def check_player_standing(self, player):
         """检查玩家是否站在平台上"""
-        # 玩家底部在平台顶部附近（移除on_ground检查，更可靠）
         return (player.x < self.x + self.width and
                 player.x + player.width > self.x and
                 player.y + player.height >= self.y and
@@ -75,9 +132,24 @@ class KeyPlatform:
     
     def draw(self, screen):
         """绘制3D键帽效果"""
-        # 如果已断裂，绘制碎片效果
+        # 如果已断裂，绘制冰块碎片
         if self.is_broken:
-            self._draw_broken_pieces(screen)
+            self._draw_ice_shards(screen)
+            
+            # 显示重生倒计时
+            if self.respawn_timer > 0:
+                respawn_seconds = (self.respawn_time - self.respawn_timer) // FPS + 1
+                respawn_text = font_tiny.render(f"Respawning... {respawn_seconds}s", True, CYAN)
+                text_rect = respawn_text.get_rect(
+                    center=(self.x + self.width//2, self.y + self.height//2)
+                )
+                # 绘制半透明背景
+                bg_rect = text_rect.inflate(20, 10)
+                s = pygame.Surface((bg_rect.width, bg_rect.height))
+                s.set_alpha(180)
+                s.fill((0, 0, 0))
+                screen.blit(s, bg_rect)
+                screen.blit(respawn_text, text_rect)
             return
         
         # 绘制按键阴影（底部）
@@ -92,25 +164,22 @@ class KeyPlatform:
                         (self.x, self.y + side_offset, 
                          self.width, self.height))
         
-        # 绘制按键顶面
-        # 优先判断是否动态+可断裂（Shift键）
+        # 绘制按键顶面（冰蓝色）
         if self.is_dynamic and self.is_breakable:
-            # Shift键：冰蓝色（立即断裂，不显示破损渐变）
             key_color = (200, 220, 255)
         elif self.is_dynamic:
-            # 仅动态平台：浅蓝色
             key_color = (200, 220, 255)
         elif self.is_breakable:
-            # 仅可断裂平台（立即断裂，不显示破损渐变）
             key_color = KEY_COLOR
         else:
-            # 普通平台
             key_color = KEY_COLOR
             
         pygame.draw.rect(screen, key_color, 
                         (self.x, self.y, self.width, self.height))
         
-        # 立即断裂，不绘制裂痕效果
+        # 绘制冰晶纹理效果
+        if (self.is_dynamic and self.is_breakable) or self.is_breakable:
+            self._draw_ice_texture(screen)
         
         # 绘制按键边框
         pygame.draw.rect(screen, BLACK, 
@@ -131,81 +200,67 @@ class KeyPlatform:
                 center=(self.x + self.width//2, self.y - 15)
             )
             screen.blit(arrow_text, arrow_rect)
-        
-        # 立即断裂，不显示进度条和警告
     
-    def _draw_cracks(self, screen):
-        """绘制裂痕"""
-        damage_ratio = self.break_timer / self.break_threshold
-        crack_color = (80, 80, 80)
+    def _draw_ice_texture(self, screen):
+        """绘制冰晶纹理"""
+        # 绘制细微的冰晶裂纹
+        ice_white = (240, 250, 255)
         
-        # 根据损坏程度绘制不同数量的裂痕
-        if damage_ratio > 0.2:
-            # 第一道裂痕 - 左上到右下
-            start_x = self.x + 10
-            start_y = self.y + 5
-            end_x = self.x + self.width - 10
-            end_y = self.y + self.height - 5
-            pygame.draw.line(screen, crack_color, (start_x, start_y), (end_x, end_y), 2)
+        # 随机但固定的冰晶线条（基于平台位置生成）
+        random.seed(int(self.x + self.y))
         
-        if damage_ratio > 0.4:
-            # 第二道裂痕 - 右上到左下
-            start_x = self.x + self.width - 10
-            start_y = self.y + 5
-            end_x = self.x + 10
-            end_y = self.y + self.height - 5
-            pygame.draw.line(screen, crack_color, (start_x, start_y), (end_x, end_y), 2)
+        for i in range(5):
+            x1 = self.x + random.randint(5, self.width - 5)
+            y1 = self.y + random.randint(5, self.height - 5)
+            x2 = x1 + random.randint(-20, 20)
+            y2 = y1 + random.randint(-10, 10)
+            
+            # 限制在平台范围内
+            x2 = max(self.x + 5, min(self.x + self.width - 5, x2))
+            y2 = max(self.y + 5, min(self.y + self.height - 5, y2))
+            
+            pygame.draw.line(screen, ice_white, (x1, y1), (x2, y2), 1)
         
-        if damage_ratio > 0.6:
-            # 第三道裂痕 - 横向
-            mid_y = self.y + self.height // 2
-            pygame.draw.line(screen, crack_color, 
-                           (self.x + 5, mid_y), 
-                           (self.x + self.width - 5, mid_y), 2)
+        # 绘制闪烁的冰晶点
+        if pygame.time.get_ticks() % 1000 < 500:
+            for i in range(3):
+                px = self.x + random.randint(10, self.width - 10)
+                py = self.y + random.randint(5, self.height - 5)
+                pygame.draw.circle(screen, ice_white, (px, py), 2)
         
-        if damage_ratio > 0.8:
-            # 第四道裂痕 - 纵向
-            mid_x = self.x + self.width // 2
-            pygame.draw.line(screen, crack_color, 
-                           (mid_x, self.y + 5), 
-                           (mid_x, self.y + self.height - 5), 2)
+        random.seed()  # 恢复随机种子
     
-    def _draw_broken_pieces(self, screen):
-        """绘制断裂后的碎片效果"""
-        # 碎片逐渐消失的透明度
-        alpha = max(0, 255 - int(255 * (self.respawn_timer / self.respawn_time)))
-        
-        if alpha > 0:
-            # 创建半透明表面
-            piece_surface = pygame.Surface((self.width, self.height))
-            piece_surface.set_alpha(alpha)
+    def _draw_ice_shards(self, screen):
+        """绘制飞散的冰块碎片"""
+        for shard in self.ice_shards:
+            if shard['alpha'] <= 0:
+                continue
             
-            # 绘制几个分散的碎片（冰蓝色）
-            piece_color = (180, 200, 235)  # 冰蓝色碎片
-            piece_width = self.width // 3
-            piece_height = self.height // 2
+            # 创建带旋转的冰块碎片
+            surf = pygame.Surface((int(shard['w']), int(shard['h'])), pygame.SRCALPHA)
             
-            # 左碎片（下落）
-            offset_y = int(self.respawn_timer * 2)
-            pygame.draw.rect(piece_surface, piece_color, 
-                           (0, offset_y, piece_width, piece_height))
+            # 绘制冰块主体
+            color_with_alpha = (*shard['color'][:3], int(shard['alpha']))
+            pygame.draw.rect(surf, color_with_alpha, (0, 0, int(shard['w']), int(shard['h'])))
             
-            # 中碎片（下落更快）
-            offset_y2 = int(self.respawn_timer * 3)
-            pygame.draw.rect(piece_surface, piece_color, 
-                           (piece_width, offset_y2, piece_width, piece_height))
+            # 添加高光
+            highlight_color = (255, 255, 255, int(shard['alpha'] * 0.6))
+            pygame.draw.rect(surf, highlight_color, (2, 2, max(1, int(shard['w']) - 4), max(1, int(shard['h'] * 0.3))), 1)
             
-            # 右碎片（下落）
-            offset_y3 = int(self.respawn_timer * 2.5)
-            pygame.draw.rect(piece_surface, piece_color, 
-                           (piece_width * 2, offset_y3, piece_width, piece_height))
+            # 添加边缘裂纹
+            edge_color = (150, 180, 220, int(shard['alpha'] * 0.8))
+            pygame.draw.rect(surf, edge_color, (0, 0, int(shard['w']), int(shard['h'])), 2)
             
-            screen.blit(piece_surface, (self.x, self.y))
-        
-        # 显示重生倒计时
-        if self.respawn_timer > 0:
-            respawn_text = font_tiny.render("Respawning...", True, CYAN)
-            text_rect = respawn_text.get_rect(
-                center=(self.x + self.width//2, self.y + self.height//2)
-            )
-            screen.blit(respawn_text, text_rect)  
+            # 旋转碎片
+            rotated = pygame.transform.rotate(surf, shard['rotation'])
+            rotated_rect = rotated.get_rect(center=(int(shard['x'] + shard['w']/2), 
+                                                     int(shard['y'] + shard['h']/2)))
+            
+            screen.blit(rotated, rotated_rect)
+            
+            # 绘制飞散的冰晶粒子
+            if random.random() < 0.3:
+                particle_x = int(shard['x'] + shard['w']/2 + random.randint(-5, 5))
+                particle_y = int(shard['y'] + shard['h']/2 + random.randint(-5, 5))
+                particle_color = (200, 230, 255, int(shard['alpha'] * 0.5))
+                pygame.draw.circle(screen, particle_color, (particle_x, particle_y), 1)  
