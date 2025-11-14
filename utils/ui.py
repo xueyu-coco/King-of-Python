@@ -6,10 +6,11 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     hp_bar_height = 25
     hp_bar_y = 60
     
-    # 玩家1血条
+    # 玩家1血条（从左到右填充，扣血时从右边减少）
     p1_x = 50
     pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
+    # 从左边开始绘制，向右延伸
     pygame.draw.rect(screen, player1.color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
     pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
@@ -32,11 +33,14 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
             ay = 8
         screen.blit(p1_avatar, (ax, ay))
     
-    # 玩家2血条
+    # 玩家2血条（从右到左填充，扣血时从左边减少，保持右对齐）
     p2_x = WIDTH - 50 - hp_bar_width
     pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
-    pygame.draw.rect(screen, player2.color, (p2_x, hp_bar_y, hp2_width, hp_bar_height))
+    # 关键：血条右对齐，从(p2_x + hp_bar_width - hp2_width)开始绘制
+    # 扣血时hp2_width变小，起始x向右移动，实现从左边消失的效果
+    hp2_start_x = p2_x + (hp_bar_width - hp2_width)
+    pygame.draw.rect(screen, player2.color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
     pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name2 = "PLAYER 2"

@@ -1,4 +1,3 @@
-# King Monica
 
 This is a simple Pygame demo where the background is a rolling code screen and clickable "command bubbles" appear. Click a bubble to trigger a special visual effect.
 
