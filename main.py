@@ -9,6 +9,7 @@ from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
 from final.score import play_score_animation
+from Backround import backround_1 as background
 
 try:
     HERE = os.path.dirname(__file__)
@@ -16,7 +17,12 @@ try:
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
     # try to import the batch two-face capture helper if available
-    from face_detection.face_login_demo import capture_two_and_make_sprites, capture_and_make_sprite
+    # Import face capture helpers only when not explicitly disabled via env.
+    if os.environ.get('DISABLE_FACE') != '1':
+        from face_detection.face_login_demo import capture_two_and_make_sprites, capture_and_make_sprite
+    else:
+        capture_two_and_make_sprites = None
+        capture_and_make_sprite = None
 except Exception:
     # fall back to single-capture function if batch isn't available
     try:
@@ -169,7 +175,7 @@ def main():
     start = True
     local_p1 = None
     local_p2 = None
-    global screen
+    global screen, WIDTH, HEIGHT
     # if display was quit by external code (e.g. face capture), re-init it
     if not pygame.get_init() or not pygame.display.get_init() or pygame.display.get_surface() is None:
         pygame.init()
@@ -183,6 +189,12 @@ def main():
     
     while start:
         screen.fill(BG_COLOR)
+        # DEBUG: sanity checks for font before rendering
+        try:
+            print('DEBUG font_large type:', type(font_large), 'hasattr render:', hasattr(font_large, 'render'))
+            print('DEBUG text length:', len('King of Python'))
+        except Exception:
+            pass
         title = font_large.render('King of Python', True, BLACK)
         sub = font_small.render('Press SPACE to capture faces, S to skip and start', True, BLACK)
         screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 100))
@@ -194,6 +206,14 @@ def main():
                 start = False
                 pygame.quit()
                 sys.exit()
+            elif ev.type == pygame.VIDEORESIZE:
+                # recreate main display and update background target
+                try:
+                    WIDTH, HEIGHT = ev.w, ev.h
+                    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+                    background.set_surface(screen)
+                except Exception:
+                    pass
             if ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_SPACE and (capture_two_and_make_sprites is not None or capture_and_make_sprite is not None):
                     # Prefer a single-shot two-face capture if available
@@ -234,6 +254,13 @@ def main():
     
     # 创建键盘平台
     platforms = create_keyboard_platforms()
+
+    # 将背景渲染目标设为主屏幕（背景模块现在是导入安全的）
+    try:
+        background.set_surface(screen)
+    except Exception:
+        # 如果背景模块不可用或 set_surface 失败，不影响主流程
+        pass
     
     # 创建玩家
     player1_controls = {
@@ -403,6 +430,14 @@ def main():
         
         # 绘制
         screen.fill(BG_COLOR)
+
+        # 背景更新与绘制（来自 Backround.backround_1）
+        try:
+            background.update(pygame.time.get_ticks())
+            background.draw(screen)
+        except Exception:
+            # if background fails, ignore so main loop continues
+            pass
         
         # 绘制所有键盘平台
         for platform in platforms:
