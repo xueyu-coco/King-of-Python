@@ -96,7 +96,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
 
         # place big winner text on monitor
-        vt = font_large.render("VICTORY", True, ORANGE)
+        vt = font_medium.render("VICTORY", True, ORANGE)
         vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery - 18))
         screen.blit(vt, vt_rect)
 
