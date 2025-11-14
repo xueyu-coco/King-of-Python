@@ -132,19 +132,42 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
             ay = 8
         screen.blit(p2_avatar, (ax, ay))
     
-    # 技能说明
-    info_y = HEIGHT - 120
-    pow_info = font_tiny.render("pow(): Attack 8HP", True, ORANGE)
-    delete_info = font_tiny.render("delete: Remove enemy skill", True, RED)
-    print_info = font_tiny.render("print: Shoot 'Attack!' 2HP", True, YELLOW)
-    ctrlc_info = font_tiny.render("Ctrl+C: Freeze 3s", True, CYAN)
-    type_info = font_tiny.render("TypeError: Reverse controls 10s", True, DARK_RED)
+    # 技能说明 - 移到 SPACE 平台下方，水平排列
+    # SPACE 平台位置：(75, HEIGHT - 100, 1050, 38)
+    space_bottom = HEIGHT - 100 + 38
+    info_y = space_bottom + 15  # SPACE 平台下方 15 像素
     
-    screen.blit(pow_info, (WIDTH//2 - 130, info_y))
-    screen.blit(delete_info, (WIDTH//2 - 130, info_y + 20))
-    screen.blit(print_info, (WIDTH//2 - 130, info_y + 40))
-    screen.blit(ctrlc_info, (WIDTH//2 - 130, info_y + 60))
-    screen.blit(type_info, (WIDTH//2 - 130, info_y + 80))
+    # 计算技能说明的总宽度，平均分布
+    skill_infos = [
+        ("pow(): Attack 8HP", ORANGE),
+        ("delete: Remove skill", RED),
+        ("print: Shoot 2HP", YELLOW),
+        ("Ctrl+C: Freeze 3s", CYAN),
+        ("TypeError: Reverse 10s", DARK_RED)
+    ]
+    
+    # 计算每个技能说明的宽度
+    total_width = 1050  # SPACE 平台宽度
+    start_x = 75  # SPACE 平台起始 x
+    spacing = total_width / len(skill_infos)
+    
+    for i, (text, color) in enumerate(skill_infos):
+        # 计算每个技能的中心位置
+        x_pos = start_x + spacing * i + spacing / 2
+        
+        # 绘制彩色圆点作为图标
+        icon_radius = 6
+        pygame.draw.circle(screen, color, (int(x_pos - 40), int(info_y + 8)), icon_radius)
+        
+        # 绘制技能文字
+        skill_text = font_tiny.render(text, True, WHITE)
+        text_rect = skill_text.get_rect(midleft=(int(x_pos - 30), int(info_y + 8)))
+        
+        # 添加文字阴影增强可读性
+        shadow_text = font_tiny.render(text, True, BLACK)
+        shadow_rect = shadow_text.get_rect(midleft=(int(x_pos - 29), int(info_y + 9)))
+        screen.blit(shadow_text, shadow_rect)
+        screen.blit(skill_text, text_rect)
 
 def create_keyboard_platforms():
     """创建键盘主题的平台布局"""
