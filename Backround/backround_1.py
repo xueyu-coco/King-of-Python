@@ -2,13 +2,17 @@ import pygame
 import random
 import math
 
-# Initialize Pygame
-pygame.init()
+# NOTE: This module used to initialize Pygame and create a display at import time.
+# That caused import-time side effects. Make the module import-safe by deferring
+# pygame.init() and display.set_mode() until `init(..., create_display=True)` or
+# until an external caller calls `set_surface(surface)`.
 
-# Window size settings
+# Window size defaults (can be overridden by init or set_surface)
 cw, ch = 1200, 800
-screen = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
-pygame.display.set_caption("Matrix Digital Rain")
+screen = None  # rendering target surface (set by init(create_display=True) or set_surface)
+
+# Global alpha scale for the streams (0.0 - 1.0). Lower to make streams more transparent.
+ALPHA_SCALE = 0.6
 
 # Color definitions (use a soft pastel palette for multicolor streams)
 PALETTE = [
@@ -37,6 +41,7 @@ SCALE_MAX = 1.40
 
 # Compute number of columns
 columns = cw // font_size
+module_font = None
 
 class CharStream:
     def __init__(self, column):
@@ -122,8 +127,11 @@ class CharStream:
                 except Exception:
                     base_scaled = pygame.transform.scale(text_surf, (sw, sh)) if (sw != text_surf.get_width() or sh != text_surf.get_height()) else text_surf
 
-                # Alpha settings and compute blit positions
-                base_alpha = alpha
+                # Scale alpha by global ALPHA_SCALE and compute blit positions
+                try:
+                    base_alpha = max(0, min(255, int(alpha * ALPHA_SCALE)))
+                except Exception:
+                    base_alpha = alpha
                 blit_x = int(self.x + (font_size - sw) / 2)
                 blit_y = int(char['y'] - (sh - font_size))
 
@@ -147,26 +155,80 @@ def create_streams():
         char_streams.append(stream)
 
 def handle_resize(event):
-    global cw, ch, columns, screen
-    cw, ch = event.w, event.h
-    screen = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
+    """Handle a resize event or (w,h) tuple.
+
+    This will update internal cw/ch/columns and recreate streams, but it will
+    NOT create a new display surface. The caller (usually main) is
+    responsible for creating the display surface and calling `set_surface`.
+    """
+    global cw, ch, columns
+    if hasattr(event, 'w') and hasattr(event, 'h'):
+        cw, ch = event.w, event.h
+    elif isinstance(event, (tuple, list)) and len(event) == 2:
+        cw, ch = int(event[0]), int(event[1])
+    else:
+        return
     columns = cw // font_size
+    create_streams()
+
+
+def init(width=None, height=None, create_display=False, caption="Matrix Digital Rain"):
+    """Initialize module settings.
+
+    If create_display is True this will also call pygame.init() and create
+    a display surface which will be used as the target for draw().
+    Otherwise the module will be import-safe and require set_surface(surface)
+    or the caller to pass a surface to draw().
+    """
+    global cw, ch, columns, screen
+    if width is not None:
+        cw = int(width)
+    if height is not None:
+        ch = int(height)
+    columns = cw // font_size
+    if create_display:
+        pygame.init()
+        screen = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
+        pygame.display.set_caption(caption)
+    create_streams()
+
+
+def set_surface(surface):
+    """Set an external surface as the rendering target (safe for embedding).
+
+    Passing the main display surface here lets the background draw into the
+    game's main screen without the module creating its own window.
+    """
+    global screen, cw, ch, columns
+    screen = surface
+    try:
+        w, h = surface.get_size()
+        cw, ch = int(w), int(h)
+        columns = cw // font_size
+    except Exception:
+        # surface may not be a pygame Surface; ignore size update if so
+        pass
     create_streams()
 
 def main():
     global char_streams
 
-    # Create font
+    # Standalone runner: initializes pygame and creates a display
+    pygame.init()
+    screen_local = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
+    pygame.display.set_caption("Matrix Digital Rain")
+
+    # create font
     font = pygame.font.SysFont('couriernew', font_size, bold=True)
 
-    # Create initial streams
-    create_streams()
+    # set our surface so draw() can use it
+    set_surface(screen_local)
 
     clock = pygame.time.Clock()
     running = True
 
     # fill screen once to initialize
-    screen.fill(BLACK)
+    screen_local.fill(BLACK)
 
     while running:
         current_time = pygame.time.get_ticks()
@@ -176,18 +238,21 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.VIDEORESIZE:
+                # caller is responsible for recreating the display; set_surface
+                # will be called from the caller if necessary. Here we update
+                # internal sizes and streams only.
                 handle_resize(event)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
         # Clear screen each frame (no motion trail)
-        screen.fill(BLACK)
+        screen_local.fill(BLACK)
 
         # Update and draw all streams
         for stream in char_streams:
             stream.update(current_time)
-            stream.draw(screen, font)
+            stream.draw(screen_local, font)
 
         # Randomly add new streams
         if len(char_streams) < max_char_count and random.random() < 0.02:
@@ -205,6 +270,47 @@ def main():
         clock.tick(60)
 
     pygame.quit()
+
+
+def update(current_time):
+    """Update all streams (call once per frame)."""
+    # advance each stream
+    for stream in char_streams:
+        stream.update(current_time)
+
+    # occasionally add/remove streams for dynamics (same logic as standalone)
+    if len(char_streams) < max_char_count and random.random() < 0.02:
+        available_columns = set(range(columns)) - set(stream.column for stream in char_streams)
+        if available_columns:
+            col = random.choice(list(available_columns))
+            new_stream = CharStream(col)
+            char_streams.append(new_stream)
+
+    if char_streams and random.random() < 0.01:
+        char_streams.pop(random.randint(0, len(char_streams) - 1))
+
+
+def draw(surface=None):
+    """Draw streams onto the given surface (or internal screen if set).
+
+    This will lazily create a module font if needed.
+    """
+    global module_font
+    if surface is None:
+        surface = screen
+    if surface is None:
+        return
+
+    if module_font is None:
+        try:
+            module_font = pygame.font.SysFont('couriernew', font_size, bold=True)
+        except Exception:
+            # fallback to default font
+            module_font = pygame.font.Font(None, font_size)
+
+    # clear area where background draws? caller usually clears screen
+    for stream in char_streams:
+        stream.draw(surface, module_font)
 
 if __name__ == "__main__":
     main()
