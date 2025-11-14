@@ -220,8 +220,9 @@ def main():
             print('DEBUG text length:', len('King of Python'))
         except Exception:
             pass
-        title = font_large.render('King of Python', True, BLACK)
-        sub = font_small.render('Press SPACE to capture faces, S to skip and start', True, BLACK)
+        # Use the project's PURPLE for title/subtitle so UI matches the background tint
+        title = font_large.render('King of Python', True, PURPLE)
+        sub = font_small.render('Press SPACE to capture faces, S to skip and start', True, PURPLE)
         screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 100))
         screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT//2 + 20))
         pygame.display.flip()
