@@ -21,7 +21,7 @@ YELLOW = (255, 215, 0)
 ICE_BLUE = (173, 216, 230)
 DARK_RED = (139, 0, 0)
 # Main background color — set to white per user request
-BG_COLOR = (255, 255, 255)
+BG_COLOR = (0, 0, 0)  # changed to black per user request
 KEY_COLOR = (220, 220, 230)
 KEY_SHADOW = (100, 100, 120)
 KEY_SIDE = (180, 180, 200)
