@@ -3,6 +3,16 @@ import random
 import math
 from settings import *
 
+# Purple palette for platforms (local variants for contrast)
+# Use global PURPLE from settings and derive lighter/darker tones.
+# Adopt a softer, brighter pastel purple palette (lighter and less saturated)
+P_PRIMARY = (210, 180, 255)    # main pastel purple
+P_LIGHT = (245, 235, 255)      # very light top face (bright, pastel)
+P_SIDE = (190, 160, 210)       # soft side tone for subtle 3D
+P_SHADOW = (140, 110, 160)     # muted shadow (not too dark)
+P_HIGHLIGHT = (255, 250, 255)  # near-white highlight for sparkle
+P_TEXT = (80, 40, 110)         # readable but softer dark purple for labels
+
 class KeyPlatform:
     """键盘按键平台类"""
     def __init__(self, x, y, width, height, label, is_dynamic=False, is_breakable=False):
@@ -115,10 +125,10 @@ class KeyPlatform:
                 'rot_speed': random.uniform(-15, 15),
                 'alpha': 255,
                 'color': random.choice([
-                    (180, 220, 255),  # 冰蓝
-                    (200, 230, 255),  # 浅冰蓝
-                    (160, 200, 245),  # 深冰蓝
-                    (220, 240, 255),  # 极浅冰蓝
+                    (240, 220, 255),  # very light purple
+                    (230, 200, 255),  # light lavender
+                    (210, 180, 255),  # pastel purple
+                    (250, 235, 255),  # ultra pale
                 ])
             }
             self.ice_shards.append(shard)
@@ -139,7 +149,7 @@ class KeyPlatform:
             # 显示重生倒计时
             if self.respawn_timer > 0:
                 respawn_seconds = (self.respawn_time - self.respawn_timer) // FPS + 1
-                respawn_text = font_tiny.render(f"Respawning... {respawn_seconds}s", True, CYAN)
+                respawn_text = font_tiny.render(f"Respawning... {respawn_seconds}s", True, P_PRIMARY)
                 text_rect = respawn_text.get_rect(
                     center=(self.x + self.width//2, self.y + self.height//2)
                 )
@@ -147,32 +157,32 @@ class KeyPlatform:
                 bg_rect = text_rect.inflate(20, 10)
                 s = pygame.Surface((bg_rect.width, bg_rect.height))
                 s.set_alpha(180)
-                s.fill((0, 0, 0))
+                s.fill(P_SHADOW)
                 screen.blit(s, bg_rect)
                 screen.blit(respawn_text, text_rect)
             return
         
-        # 绘制按键阴影（底部）
+        # 绘制按键阴影（底部，紫色调）
         shadow_offset = 5
-        pygame.draw.rect(screen, KEY_SHADOW, 
+        pygame.draw.rect(screen, P_SHADOW, 
                         (self.x + shadow_offset, self.y + shadow_offset, 
                          self.width, self.height))
         
-        # 绘制按键侧面（3D效果）
+        # 绘制按键侧面（3D效果，紫色）
         side_offset = 3
-        pygame.draw.rect(screen, KEY_SIDE, 
+        pygame.draw.rect(screen, P_SIDE, 
                         (self.x, self.y + side_offset, 
                          self.width, self.height))
         
-        # 绘制按键顶面（冰蓝色）
+        # 绘制按键顶面（紫色调）
         if self.is_dynamic and self.is_breakable:
-            key_color = (200, 220, 255)
+            key_color = P_LIGHT
         elif self.is_dynamic:
-            key_color = (200, 220, 255)
+            key_color = P_LIGHT
         elif self.is_breakable:
-            key_color = KEY_COLOR
+            key_color = P_PRIMARY
         else:
-            key_color = KEY_COLOR
+            key_color = P_PRIMARY
             
         pygame.draw.rect(screen, key_color, 
                         (self.x, self.y, self.width, self.height))
@@ -185,8 +195,8 @@ class KeyPlatform:
         pygame.draw.rect(screen, BLACK, 
                         (self.x, self.y, self.width, self.height), 2)
         
-        # 绘制按键标签（字母）
-        label_text = font_key.render(self.label, True, BLACK)
+        # 绘制按键标签（字母） — 使用深紫以保持对比
+        label_text = font_key.render(self.label, True, P_TEXT)
         label_rect = label_text.get_rect(
             center=(self.x + self.width//2, self.y + self.height//2)
         )
@@ -195,7 +205,7 @@ class KeyPlatform:
         # 动态平台额外标识
         if self.is_dynamic:
             arrow = "↕"
-            arrow_text = font_tiny.render(arrow, True, BLUE)
+            arrow_text = font_tiny.render(arrow, True, P_PRIMARY)
             arrow_rect = arrow_text.get_rect(
                 center=(self.x + self.width//2, self.y - 15)
             )
@@ -203,8 +213,8 @@ class KeyPlatform:
     
     def _draw_ice_texture(self, screen):
         """绘制冰晶纹理"""
-        # 绘制细微的冰晶裂纹
-        ice_white = (240, 250, 255)
+        # 绘制细微的冰晶裂纹（紫色高光）
+        ice_white = P_HIGHLIGHT
         
         # 随机但固定的冰晶线条（基于平台位置生成）
         random.seed(int(self.x + self.y))
@@ -243,12 +253,12 @@ class KeyPlatform:
             color_with_alpha = (*shard['color'][:3], int(shard['alpha']))
             pygame.draw.rect(surf, color_with_alpha, (0, 0, int(shard['w']), int(shard['h'])))
             
-            # 添加高光
-            highlight_color = (255, 255, 255, int(shard['alpha'] * 0.6))
+            # 添加高光（更浅的紫色高光）
+            highlight_color = (255, 250, 255, int(shard['alpha'] * 0.6))
             pygame.draw.rect(surf, highlight_color, (2, 2, max(1, int(shard['w']) - 4), max(1, int(shard['h'] * 0.3))), 1)
             
-            # 添加边缘裂纹
-            edge_color = (150, 180, 220, int(shard['alpha'] * 0.8))
+            # 添加边缘裂纹（浅紫色边缘）
+            edge_color = (210, 185, 220, int(shard['alpha'] * 0.8))
             pygame.draw.rect(surf, edge_color, (0, 0, int(shard['w']), int(shard['h'])), 2)
             
             # 旋转碎片
@@ -262,5 +272,5 @@ class KeyPlatform:
             if random.random() < 0.3:
                 particle_x = int(shard['x'] + shard['w']/2 + random.randint(-5, 5))
                 particle_y = int(shard['y'] + shard['h']/2 + random.randint(-5, 5))
-                particle_color = (200, 230, 255, int(shard['alpha'] * 0.5))
+                particle_color = (240, 210, 255, int(shard['alpha'] * 0.5))
                 pygame.draw.circle(screen, particle_color, (particle_x, particle_y), 1)  
