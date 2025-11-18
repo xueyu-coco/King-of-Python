@@ -94,14 +94,14 @@ def capture_face_image(wait_seconds=3, label=None):
     try:
         # stability tracking: keep recent centers
         recent_centers = []
-        stable_required = 10  # number of frames with low movement
-        movement_threshold = 6  # pixels
+        stable_required = 18  # number of frames with low movement (increase for clearer stillness)
+        movement_threshold = 4  # pixels (smaller threshold -> require less movement)
 
         # smoothing / hold parameters to avoid flicker when detection is intermittent
         last_box = None  # (x, y, w, h) last drawn box
         last_seen = 0
-        hold_frames = 6  # number of frames to keep showing last_box when detection is lost
-        smooth_alpha = 0.45  # smoothing factor (0=no smoothing, 1=jump to new box)
+        hold_frames = 12  # number of frames to keep showing last_box when detection is lost
+        smooth_alpha = 0.28  # smoothing factor (lower -> smoother / less jitter)
 
         while True:
             ret, frame = cap.read()
@@ -162,6 +162,7 @@ def capture_face_image(wait_seconds=3, label=None):
                 if len(recent_centers) >= stable_required:
                     dx = max(c[0] for c in recent_centers) - min(c[0] for c in recent_centers)
                     dy = max(c[1] for c in recent_centers) - min(c[1] for c in recent_centers)
+                    # require both axes motion to be small to be considered stable
                     if dx <= movement_threshold and dy <= movement_threshold:
                         stable = True
 
@@ -207,7 +208,7 @@ def capture_face_image(wait_seconds=3, label=None):
                         pass
 
                 # ensure the whole face bbox is fully inside the frame (not clipped)
-                margin = 5
+                margin = 8
                 fully_in_frame = (x > margin and y > margin and x + w < frame.shape[1] - margin and y + h < frame.shape[0] - margin)
 
                 # only start countdown when stable and fully inside the camera frame
@@ -306,7 +307,15 @@ def capture_face_image(wait_seconds=3, label=None):
                         cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
                     except Exception:
                         pass
-                    imshow_mirror('Face Capture', display)
+                    # keep showing last_box for a short smooth hold to prevent flicker
+                    if last_box is not None and last_seen < hold_frames:
+                        fb = display.copy()
+                        bx, by, bw, bh = last_box
+                        cv2.rectangle(fb, (bx, by), (bx + bw, by + bh), (0, 200, 0), 2)
+                        imshow_mirror('Face Capture', fb)
+                        last_seen += 1
+                    else:
+                        imshow_mirror('Face Capture', display)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
@@ -368,14 +377,15 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
     captured = None
     try:
         recent_centers = []
-        stable_required = 10
-        movement_threshold = 6
+        # require longer stability window and lower motion threshold for two faces
+        stable_required = 18
+        movement_threshold = 4
 
         # smoothing/hold for two-face mode
         last_boxes = None  # [(x1,y1,w1,h1),(x2,y2,w2,h2)]
         last_seen = 0
-        hold_frames = 6
-        smooth_alpha = 0.45
+        hold_frames = 12
+        smooth_alpha = 0.28
 
         while True:
             ret, frame = cap.read()
