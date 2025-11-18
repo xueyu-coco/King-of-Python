@@ -19,14 +19,15 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     # (No special background) use normal BG_COLOR
     from settings import BG_COLOR
 
-    # Setup simple scene positions (computer centered)
+    # Setup simple scene positions (computer centered on screen)
     comp_w = 240
     comp_h = 140
+    # center monitor in the middle of the screen
     comp_x = WIDTH // 2
-    comp_y = HEIGHT - 140
-    monitor_rect = pygame.Rect(comp_x - comp_w // 2, comp_y - comp_h, comp_w, comp_h)
+    comp_y = HEIGHT // 2 + 80  # slightly lower than exact center so characters sit comfortably
+    monitor_rect = pygame.Rect(comp_x - comp_w // 2, comp_y - comp_h // 2 - 20, comp_w, comp_h)
     chair_x = comp_x - 40
-    chair_y = comp_y - 20
+    chair_y = monitor_rect.bottom + 6
 
     crown = None
     try:
@@ -54,10 +55,10 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     loser.vel_x = 0
     loser.vel_y = 0
 
-    # Place loser standing/lying near the stage
-    loser_target_x = WIDTH // 2 - 200
+    # Place loser initially to the left of the monitor (will be updated each frame)
+    loser_target_x = monitor_rect.left - 120
     loser.x = loser_target_x
-    loser.y = HEIGHT - loser.height - 30
+    loser.y = monitor_rect.bottom - loser.height + 20
 
     # Walk loop: move winner toward target_x
     for frame in range(FPS * 6):  # up to 6 seconds
@@ -91,7 +92,8 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
         # draw computer (base + monitor)
         base_h = 12
-        pygame.draw.rect(screen, KEY_SIDE, (monitor_rect.centerx - comp_w//2, comp_y, comp_w, base_h))
+        base_rect = pygame.Rect(monitor_rect.left, monitor_rect.bottom + 6, comp_w, base_h)
+        pygame.draw.rect(screen, KEY_SIDE, base_rect)
         pygame.draw.rect(screen, KEY_COLOR, monitor_rect)
         pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
 
@@ -100,14 +102,14 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery - 18))
         screen.blit(vt, vt_rect)
 
-        # draw chair (decorative)
+        # draw chair (decorative) under the monitor area
         pygame.draw.rect(screen, KEY_SIDE, (chair_x, chair_y, 50, 10))
         pygame.draw.rect(screen, KEY_COLOR, (chair_x, chair_y - 30, 50, 30))
 
-        # draw loser near the computer (to the right)
-        loser_target_x = monitor_rect.right + 30
+        # draw loser near the computer (to the left)
+        loser_target_x = monitor_rect.left - 120
         loser.x = loser_target_x
-        loser.y = HEIGHT - loser.height - 30
+        loser.y = monitor_rect.bottom - loser.height + 20
         loser.draw(screen)
 
         # draw winner (on top of monitor, jumping)
@@ -115,7 +117,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         if not walking:
             jump_phase += jump_speed
             offset = -int(abs(math.sin(jump_phase)) * jump_height)
-            base_y = monitor_rect.top - winner.height
+            base_y = monitor_rect.top - winner.height + 6
             winner.y = base_y + offset
         winner.x = int(winner.x)
         winner.draw(screen)
