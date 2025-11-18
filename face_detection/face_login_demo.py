@@ -32,6 +32,8 @@ def capture_and_make_sprite(player_label, palette_mode='cute'):
         raise RuntimeError('No face captured')
     crop = crop_to_face(frame, face, pad=0.5)
     pil = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+    # Mirror the image horizontally so the saved avatar is a mirrored/selfie view
+    pil = pil.transpose(Image.FLIP_LEFT_RIGHT)
     circ = circular_mask_image(pil)
     # Save the plain circular avatar (no stylization) so the avatar looks normal
     # Cap saved avatar size so files are moderate (not oversized)
@@ -79,6 +81,10 @@ def capture_two_and_make_sprites(label1='Face1', label2='Face2', palette_mode='c
 
     pil1 = Image.fromarray(cv2.cvtColor(crop1, cv2.COLOR_BGR2RGB))
     pil2 = Image.fromarray(cv2.cvtColor(crop2, cv2.COLOR_BGR2RGB))
+
+    # Mirror both images horizontally for a selfie-like avatar
+    pil1 = pil1.transpose(Image.FLIP_LEFT_RIGHT)
+    pil2 = pil2.transpose(Image.FLIP_LEFT_RIGHT)
 
     circ1 = circular_mask_image(pil1)
     circ2 = circular_mask_image(pil2)
