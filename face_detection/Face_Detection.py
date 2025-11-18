@@ -30,6 +30,24 @@ def ensure_outputs_dir():
     return out_dir
 
 
+# Mirror live preview (selfie view) when True
+MIRROR_PREVIEW = True
+
+
+def imshow_mirror(window_name, img):
+    """Show image in a window, optionally mirrored horizontally for user preview."""
+    try:
+        if MIRROR_PREVIEW:
+            img = cv2.flip(img, 1)
+        cv2.imshow(window_name, img)
+    except Exception:
+        # fallback to standard imshow if flipping or display fails
+        try:
+            cv2.imshow(window_name, img)
+        except Exception:
+            pass
+
+
 def capture_face_image(wait_seconds=3, label=None):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -184,7 +202,7 @@ def capture_face_image(wait_seconds=3, label=None):
                     except Exception:
                         disp_ready = display.copy()
 
-                    cv2.imshow('Face Capture', disp_ready)
+                    imshow_mirror('Face Capture', disp_ready)
                     if cv2.waitKey(1000) & 0xFF == 27:
                         break
 
@@ -199,7 +217,7 @@ def capture_face_image(wait_seconds=3, label=None):
                         except Exception:
                             disp2 = display.copy()
                             cv2.putText(disp2, f'Capturing in {s}s', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        cv2.imshow('Face Capture', disp2)
+                        imshow_mirror('Face Capture', disp2)
                         if cv2.waitKey(1000) & 0xFF == 27:
                             break
 
@@ -218,7 +236,7 @@ def capture_face_image(wait_seconds=3, label=None):
                         cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
                     except Exception:
                         pass
-                    cv2.imshow('Face Capture', display)
+                    imshow_mirror('Face Capture', display)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
@@ -241,14 +259,14 @@ def capture_face_image(wait_seconds=3, label=None):
                         cv2.putText(fb, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
                     except Exception:
                         pass
-                    cv2.imshow('Face Capture', fb)
+                    imshow_mirror('Face Capture', fb)
                     last_seen += 1
                 else:
                     # give up holding after hold_frames
                     last_box = None
-                    cv2.imshow('Face Capture', frame)
+                    imshow_mirror('Face Capture', frame)
             else:
-                cv2.imshow('Face Capture', frame)
+                imshow_mirror('Face Capture', frame)
             if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
                 break
     finally:
@@ -424,7 +442,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     except Exception:
                         disp_ready = display.copy()
 
-                    cv2.imshow('Face Capture', disp_ready)
+                    imshow_mirror('Face Capture', disp_ready)
                     if cv2.waitKey(1000) & 0xFF == 27:
                         break
 
@@ -438,7 +456,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         except Exception:
                             disp2 = display.copy()
                             cv2.putText(disp2, f'Capturing in {s}s', (10, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        cv2.imshow('Face Capture', disp2)
+                        imshow_mirror('Face Capture', disp2)
                         if cv2.waitKey(1000) & 0xFF == 27:
                             break
 
@@ -448,7 +466,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     break
 
                 else:
-                    cv2.imshow('Face Capture', display)
+                    imshow_mirror('Face Capture', display)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
@@ -464,13 +482,13 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     (bx1, by1, bw1, bh1), (bx2, by2, bw2, bh2) = last_boxes
                     cv2.rectangle(fb, (bx1, by1), (bx1 + bw1, by1 + bh1), (0, 200, 0), 2)
                     cv2.rectangle(fb, (bx2, by2), (bx2 + bw2, by2 + bh2), (0, 200, 0), 2)
-                    cv2.imshow('Face Capture', fb)
+                    imshow_mirror('Face Capture', fb)
                     last_seen += 1
                 else:
                     last_boxes = None
-                    cv2.imshow('Face Capture', frame)
+                    imshow_mirror('Face Capture', frame)
             else:
-                cv2.imshow('Face Capture', frame)
+                imshow_mirror('Face Capture', frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
     finally:
@@ -748,7 +766,7 @@ def make_rage_face():
     # convert to BGR for OpenCV display
     display_bgr = cv2.cvtColor(display_img, cv2.COLOR_RGBA2BGR)
     window_title = 'Capture Preview (original | stylized | sketch) - s=save, q=quit'
-    cv2.imshow(window_title, display_bgr)
+    imshow_mirror(window_title, display_bgr)
 
 
     # interactive save/quit loop (no auto-save) - require explicit 's' to save or 'q' to quit
