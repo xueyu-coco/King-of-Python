@@ -2,7 +2,7 @@ import pygame
 import time
 import math
 import random
-from settings import WIDTH, HEIGHT, KEY_SIDE, KEY_COLOR, KEY_SHADOW, ORANGE, YELLOW, BLACK, font_large, font_small, CYAN, FPS
+from settings import WIDTH, HEIGHT, KEY_SIDE, KEY_COLOR, KEY_SHADOW, ORANGE, YELLOW, BLACK, font_small, font_medium, CYAN, FPS
 
 
 def play_score_animation(screen, winner, loser, winner_avatar=None):
