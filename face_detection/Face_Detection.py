@@ -34,21 +34,44 @@ def ensure_outputs_dir():
 MIRROR_PREVIEW = True
 
 
-def imshow_mirror(window_name, img, mirror=True):
+def imshow_mirror(window_name, img, mirror=True, annotations=None):
     """Show image in a window, optionally mirrored horizontally for user preview.
 
-    Args:
-        window_name: name of the OpenCV window
-        img: BGR(A) image to show
-        mirror: if True, flip horizontally (selfie); if False, show original frame
+    annotations: optional list of dicts with keys:
+        text: str, pos: (x,y), font, scale, color, thickness
+    Annotations are drawn AFTER flipping so they remain readable when image is mirrored.
     """
     try:
         do_mirror = MIRROR_PREVIEW and mirror
-        if do_mirror:
-            img = cv2.flip(img, 1)
-        cv2.imshow(window_name, img)
+        # perform flip first if needed
+        shown = cv2.flip(img, 1) if do_mirror else img.copy()
+
+        # draw annotations after flipping so text stays readable
+        if annotations:
+            for ann in annotations:
+                text = ann.get('text')
+                pos = ann.get('pos', (10, 30))
+                font = ann.get('font', cv2.FONT_HERSHEY_SIMPLEX)
+                scale = ann.get('scale', 0.9)
+                color = ann.get('color', (255, 255, 255))
+                thickness = ann.get('thickness', 2)
+                outline = ann.get('outline', True)
+
+                # if mirrored, adjust x coordinate so annotation stays in same visual place
+                x, y = pos
+                if do_mirror:
+                    # compute text pixel width to place same anchored position after flip
+                    (tw, th), _ = cv2.getTextSize(text, font, scale, thickness if not outline else max(1, thickness))
+                    # anchor from left: convert to position from right
+                    x = shown.shape[1] - x - tw
+
+                if outline:
+                    # draw thicker dark outline then main text
+                    cv2.putText(shown, text, (x, y), font, scale, (0, 0, 0), thickness + 2, cv2.LINE_AA)
+                cv2.putText(shown, text, (x, y), font, scale, color, thickness, cv2.LINE_AA)
+
+        cv2.imshow(window_name, shown)
     except Exception:
-        # fallback to standard imshow if flipping or display fails
         try:
             cv2.imshow(window_name, img)
         except Exception:
@@ -204,14 +227,32 @@ def capture_face_image(wait_seconds=3, label=None):
                             pass
                         cx = frame.shape[1] // 2
                         cy = frame.shape[0] // 2
-                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 6, cv2.LINE_AA)
-                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+                        # don't draw the ready text onto the image itself — we'll draw it after
+                        # mirroring via imshow_mirror so the text stays readable (not mirrored)
                     except Exception:
                         disp_ready = display.copy()
 
-                    # show the ready display unmirrored so visual hints/countdown align with capture coordinates
-                    imshow_mirror('Face Capture', disp_ready, mirror=False)
+                    # show the ready display in a separate unmirrored window so the main preview
+                    # isn't overwritten by other updates
+                    ready_win = 'Face Capture - Ready'
+                    # show mirrored image but draw the ready text after flip (so text is not mirrored)
+                    annotations = [
+                        {
+                            'text': 'ready to take picture',
+                            'pos': (cx - 200, cy - 20),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 1.0,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        }
+                    ]
+                    imshow_mirror(ready_win, disp_ready, mirror=True, annotations=annotations)
                     if cv2.waitKey(1000) & 0xFF == 27:
+                        try:
+                            cv2.destroyWindow(ready_win)
+                        except Exception:
+                            pass
                         break
 
                     # then perform a numeric countdown (wait_seconds seconds) showing large centered numbers
@@ -220,14 +261,34 @@ def capture_face_image(wait_seconds=3, label=None):
                             disp2 = disp_ready.copy()
                             cx = frame.shape[1] // 2
                             cy = frame.shape[0] // 2
-                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 0, 0), 8, cv2.LINE_AA)
-                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 255, 0), 4, cv2.LINE_AA)
+                            # draw the large countdown number as an annotation so it is drawn after flip
+                            ann = {
+                                'text': str(s),
+                                'pos': (cx - 30, cy + 40),
+                                'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                'scale': 3.0,
+                                'color': (0, 255, 0),
+                                'thickness': 4,
+                                'outline': True,
+                            }
                         except Exception:
                             disp2 = display.copy()
-                            cv2.putText(disp2, f'Capturing in {s}s', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        # countdown frames should be unmirrored (show actual capture framing)
-                        imshow_mirror('Face Capture', disp2, mirror=False)
+                            ann = {
+                                'text': f'Capturing in {s}s',
+                                'pos': (x, y - 10),
+                                'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                'scale': 0.9,
+                                'color': (0, 255, 0),
+                                'thickness': 2,
+                                'outline': True,
+                            }
+                        # countdown frames shown in the separate mirrored window with annotation
+                        imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
                         if cv2.waitKey(1000) & 0xFF == 27:
+                            try:
+                                cv2.destroyWindow(ready_win)
+                            except Exception:
+                                pass
                             break
 
                     # take one more frame as capture
@@ -446,14 +507,31 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                             pass
                         cx = frame.shape[1] // 2
                         cy = frame.shape[0] // 2
-                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 6, cv2.LINE_AA)
-                        cv2.putText(disp_ready, 'ready to take picture', (cx - 200, cy - 20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+                        # don't paint the ready text onto the image; use annotation so text
+                        # is drawn after mirroring and remains readable
                     except Exception:
                         disp_ready = display.copy()
 
-                    # two-face ready display: show unmirrored so users see actual capture framing
-                    imshow_mirror('Face Capture', disp_ready, mirror=False)
+                    # two-face ready display: show unmirrored in separate window so main preview
+                    # remains active and doesn't overwrite the countdown
+                    ready_win = 'Face Capture - Ready'
+                    annotations = [
+                        {
+                            'text': 'ready to take picture',
+                            'pos': (cx - 200, cy - 20),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 1.0,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        }
+                    ]
+                    imshow_mirror(ready_win, disp_ready, mirror=True, annotations=annotations)
                     if cv2.waitKey(1000) & 0xFF == 27:
+                        try:
+                            cv2.destroyWindow(ready_win)
+                        except Exception:
+                            pass
                         break
 
                     for s in range(wait_seconds, 0, -1):
@@ -461,14 +539,32 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                             disp2 = disp_ready.copy()
                             cx = frame.shape[1] // 2
                             cy = frame.shape[0] // 2
-                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 0, 0), 8, cv2.LINE_AA)
-                            cv2.putText(disp2, str(s), (cx - 30, cy + 40), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (0, 255, 0), 4, cv2.LINE_AA)
+                            ann = {
+                                'text': str(s),
+                                'pos': (cx - 30, cy + 40),
+                                'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                'scale': 3.0,
+                                'color': (0, 255, 0),
+                                'thickness': 4,
+                                'outline': True,
+                            }
                         except Exception:
                             disp2 = display.copy()
-                            cv2.putText(disp2, f'Capturing in {s}s', (10, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        # two-face countdown frames are unmirrored
-                        imshow_mirror('Face Capture', disp2, mirror=False)
+                            ann = {
+                                'text': f'Capturing in {s}s',
+                                'pos': (10, frame.shape[0] - 30),
+                                'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                'scale': 0.9,
+                                'color': (0, 255, 0),
+                                'thickness': 2,
+                                'outline': True,
+                            }
+                        imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
                         if cv2.waitKey(1000) & 0xFF == 27:
+                            try:
+                                cv2.destroyWindow(ready_win)
+                            except Exception:
+                                pass
                             break
 
                     ret2, frame2 = cap.read()
