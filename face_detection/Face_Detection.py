@@ -34,10 +34,17 @@ def ensure_outputs_dir():
 MIRROR_PREVIEW = True
 
 
-def imshow_mirror(window_name, img):
-    """Show image in a window, optionally mirrored horizontally for user preview."""
+def imshow_mirror(window_name, img, mirror=True):
+    """Show image in a window, optionally mirrored horizontally for user preview.
+
+    Args:
+        window_name: name of the OpenCV window
+        img: BGR(A) image to show
+        mirror: if True, flip horizontally (selfie); if False, show original frame
+    """
     try:
-        if MIRROR_PREVIEW:
+        do_mirror = MIRROR_PREVIEW and mirror
+        if do_mirror:
             img = cv2.flip(img, 1)
         cv2.imshow(window_name, img)
     except Exception:
@@ -202,7 +209,8 @@ def capture_face_image(wait_seconds=3, label=None):
                     except Exception:
                         disp_ready = display.copy()
 
-                    imshow_mirror('Face Capture', disp_ready)
+                    # show the ready display unmirrored so visual hints/countdown align with capture coordinates
+                    imshow_mirror('Face Capture', disp_ready, mirror=False)
                     if cv2.waitKey(1000) & 0xFF == 27:
                         break
 
@@ -217,7 +225,8 @@ def capture_face_image(wait_seconds=3, label=None):
                         except Exception:
                             disp2 = display.copy()
                             cv2.putText(disp2, f'Capturing in {s}s', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        imshow_mirror('Face Capture', disp2)
+                        # countdown frames should be unmirrored (show actual capture framing)
+                        imshow_mirror('Face Capture', disp2, mirror=False)
                         if cv2.waitKey(1000) & 0xFF == 27:
                             break
 
@@ -442,7 +451,8 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     except Exception:
                         disp_ready = display.copy()
 
-                    imshow_mirror('Face Capture', disp_ready)
+                    # two-face ready display: show unmirrored so users see actual capture framing
+                    imshow_mirror('Face Capture', disp_ready, mirror=False)
                     if cv2.waitKey(1000) & 0xFF == 27:
                         break
 
@@ -456,7 +466,8 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         except Exception:
                             disp2 = display.copy()
                             cv2.putText(disp2, f'Capturing in {s}s', (10, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        imshow_mirror('Face Capture', disp2)
+                        # two-face countdown frames are unmirrored
+                        imshow_mirror('Face Capture', disp2, mirror=False)
                         if cv2.waitKey(1000) & 0xFF == 27:
                             break
 
