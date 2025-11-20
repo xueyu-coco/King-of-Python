@@ -13,7 +13,7 @@ HOLD_FRAMES_TWO = 16       # 双人脸hold帧数
 SMOOTH_ALPHA_SINGLE = 0.35 # 单人脸平滑系数
 SMOOTH_ALPHA_TWO = 0.28    # 双人脸平滑系数
 
-# Try to import mediapipe; if unavailable we'll fall back to OpenCV Haar cascade
+# Try to import mediapipe
 try:
     import mediapipe as mp
     HAS_MEDIAPIPE = True
