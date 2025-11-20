@@ -6,6 +6,42 @@ from settings import WIDTH, HEIGHT, KEY_SIDE, KEY_COLOR, KEY_SHADOW, ORANGE, YEL
 
 
 def play_score_animation(screen, winner, loser, winner_avatar=None):
+    # --- UI装饰函数 ---
+    def draw_hearts(surface, x, y, count, spacing=28, size=18, color=(255, 200, 255)):
+        for i in range(count):
+            cx = x + i * spacing
+            left = (cx - size//4, y)
+            right = (cx + size//4, y)
+            top = (cx, y - size//3)
+            pygame.draw.circle(surface, color, left, size//3)
+            pygame.draw.circle(surface, color, right, size//3)
+            points = [(cx - size//2, y), (cx + size//2, y), (cx, y + size//2)]
+            pygame.draw.polygon(surface, color, points)
+
+    def draw_score_ui(surface):
+        # 紫色外框和黑色内框
+        surface.fill((180, 120, 220))
+        inner_rect = pygame.Rect(40, 40, WIDTH - 80, HEIGHT - 120)
+        pygame.draw.rect(surface, BLACK, inner_rect)
+        # 顶部 hearts
+        draw_hearts(surface, inner_rect.left + 80, inner_rect.top + 20, 10, spacing=40, size=20, color=(240, 200, 255))
+        # 三个emoji圆形
+        center_x = inner_rect.centerx
+        yy = inner_rect.top + 120
+        for i, col in enumerate([(255, 230, 120), (255, 120, 120), (255, 230, 120)]):
+            cx = center_x + (i - 1) * 120
+            pygame.draw.circle(surface, col, (cx, yy), 40)
+            pygame.draw.circle(surface, (160, 80, 200), (cx, yy), 44, 4)
+        # 左下角小圆和pac-man
+        pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, inner_rect.bottom - 30), 18)
+        pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, inner_rect.bottom - 40), (inner_rect.left + 100, inner_rect.bottom - 40), (inner_rect.left + 90, inner_rect.bottom - 20)])
+        # 右下角BE HAPPY
+        be = font_medium.render('BE HAPPY', True, (160, 255, 220))
+        be_y = inner_rect.bottom - 48
+        surface.blit(be, (inner_rect.right - be.get_width() - 20, be_y))
+        # 底部说明文字
+        sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
+        surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
     """Play a short ending animation: winner walks to a computer, sits, and wears a crown.
 
     Args:
@@ -87,9 +123,11 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         elif crown_timer > 0:
             crown_timer -= 1
 
-        # draw scene (normal background)
-        screen.fill(BG_COLOR)
 
+        # 先画UI装饰
+        draw_score_ui(screen)
+
+        # 再画原有胜利场景（电脑、椅子、角色等）
         # draw computer (base + monitor)
         base_h = 12
         base_rect = pygame.Rect(monitor_rect.left, monitor_rect.bottom + 6, comp_w, base_h)
@@ -113,7 +151,6 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         loser.draw(screen)
 
         # draw winner (on top of monitor, jumping)
-        # compute jump offset
         if not walking:
             jump_phase += jump_speed
             offset = -int(abs(math.sin(jump_phase)) * jump_height)
@@ -146,7 +183,6 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         screen.blit(sub_text, (50, 100))
 
         # draw tears for loser
-        # spawn tears occasionally
         if random.random() < 0.12:
             eye_x = int(loser.x + loser.width * 0.5)
             eye_y = int(loser.y + 16)
