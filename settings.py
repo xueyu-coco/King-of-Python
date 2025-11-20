@@ -20,6 +20,8 @@ PURPLE = (200, 40, 255)  # shift toward blue (less red) per user request
 YELLOW = (255, 215, 0)
 ICE_BLUE = (173, 216, 230)
 DARK_RED = (139, 0, 0)
+# UI color for menus/titles — set to a softer pastel purple to match platform theme
+UI_PURPLE = (210, 180, 255)
 # Main background color — set to white per user request
 BG_COLOR = (0, 0, 0)  # changed to black per user request
 KEY_COLOR = (220, 220, 230)
