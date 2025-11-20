@@ -38,15 +38,17 @@ class GameState:
         self.bubble_timer += 1
         if self.bubble_timer >= BUBBLE_SPAWN_TIME:
             x = random.randint(100, WIDTH - 100)
-            # 泡泡生成概率：pow 25%, delete 15%, print 25%, ctrlc 20%, typeerror 15%
+            # 泡泡生成概率：pow 20%, delete 12%, print 20%, super 10%, ctrlc 18%, typeerror 20%
             rand = random.random()
-            if rand < 0.25:
+            if rand < 0.20:
                 btype = 'pow'
-            elif rand < 0.40:
+            elif rand < 0.32:
                 btype = 'delete'
-            elif rand < 0.65:
+            elif rand < 0.52:
                 btype = 'print'
-            elif rand < 0.85:
+            elif rand < 0.62:
+                btype = 'super'
+            elif rand < 0.80:
                 btype = 'ctrlc'
             else:
                 btype = 'typeerror'
@@ -64,6 +66,8 @@ class GameState:
                 if bubble.check_collision(self.player1):
                     if bubble.type in ['pow', 'delete', 'print'] and self.player1.skill is None:
                         self.player1.skill = bubble.type
+                    elif bubble.type == 'super' and not self.player1.is_super:
+                        self.player1.activate_super()
                     elif bubble.type == 'ctrlc':
                         self.player1.freeze()
                         self.player1.take_damage(3, 0)
@@ -77,6 +81,8 @@ class GameState:
                 if bubble.check_collision(self.player2):
                     if bubble.type in ['pow', 'delete', 'print'] and self.player2.skill is None:
                         self.player2.skill = bubble.type
+                    elif bubble.type == 'super' and not self.player2.is_super:
+                        self.player2.activate_super()
                     elif bubble.type == 'ctrlc':
                         self.player2.freeze()
                         self.player2.take_damage(3, 0)

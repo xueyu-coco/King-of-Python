@@ -347,6 +347,17 @@ def main():
             
             check_player_collision(player1, player2)
             
+            # 检测 super() 形态碰撞
+            if player1.check_super_collision(player2):
+                knockback_dir = 1 if player1.facing_right else -1
+                player2.take_damage(5, knockback_dir * 15)  # 伤害5，击退力度15
+                player1.super_collision_cooldown = 30  # 0.5秒冷却
+            
+            if player2.check_super_collision(player1):
+                knockback_dir = 1 if player2.facing_right else -1
+                player1.take_damage(5, knockback_dir * 15)  # 伤害5，击退力度15
+                player2.super_collision_cooldown = 30  # 0.5秒冷却
+            
             # 检测攻击
             if player1.is_attacking and player1.attack_frame == 5 and not player1.is_frozen:
                 if last_p1_skill == 'pow' and check_attack_hit(player1, player2):
@@ -385,15 +396,17 @@ def main():
             bubble_timer += 1
             if bubble_timer >= BUBBLE_SPAWN_TIME:
                 x = random.randint(100, WIDTH - 100)
-                # 泡泡生成概率：pow 25%, delete 15%, print 25%, ctrlc 20%, typeerror 15%
+                # 泡泡生成概率：pow 15%, delete 10%, print 10%, super 50%, ctrlc 5%, typeerror 10%
                 rand = random.random()
-                if rand < 0.25:
+                if rand < 0.15:
                     btype = 'pow'
-                elif rand < 0.40:
+                elif rand < 0.25:
                     btype = 'delete'
-                elif rand < 0.65:
+                elif rand < 0.35:
                     btype = 'print'
                 elif rand < 0.85:
+                    btype = 'super'
+                elif rand < 0.90:
                     btype = 'ctrlc'
                 else:
                     btype = 'typeerror'
@@ -409,6 +422,8 @@ def main():
                     if bubble.check_collision(player1):
                         if bubble.type in ['pow', 'delete', 'print'] and player1.skill is None:
                             player1.skill = bubble.type
+                        elif bubble.type == 'super' and not player1.is_super:
+                            player1.activate_super()
                         elif bubble.type == 'ctrlc':
                             player1.freeze()
                             player1.take_damage(3, 0)  # 捡到ctrl+c扣3点血
@@ -421,6 +436,8 @@ def main():
                     if bubble.check_collision(player2):
                         if bubble.type in ['pow', 'delete', 'print'] and player2.skill is None:
                             player2.skill = bubble.type
+                        elif bubble.type == 'super' and not player2.is_super:
+                            player2.activate_super()
                         elif bubble.type == 'ctrlc':
                             player2.freeze()
                             player2.take_damage(3, 0)  # 捡到ctrl+c扣3点血

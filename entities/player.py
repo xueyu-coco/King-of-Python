@@ -31,6 +31,12 @@ class Player:
         # 反转状态
         self.is_reversed = False
         self.reverse_timer = 0
+        
+        # super() 形态
+        self.is_super = False
+        self.super_timer = 0
+        self.super_duration = 300  # 5秒 = 300帧（60fps）
+        self.super_collision_cooldown = 0  # 碰撞冷却，防止连续伤害
 
         # 尝试加载玩家贴图（frame1.png 用于蓝色玩家，frame2.png 用于红色玩家）
         self.image1 = None
@@ -92,6 +98,16 @@ class Player:
             if self.reverse_timer <= 0:
                 self.is_reversed = False
                 self.reverse_timer = 0
+        
+        # 更新 super() 形态
+        if self.is_super:
+            self.super_timer -= 1
+            if self.super_timer <= 0:
+                self.is_super = False
+                self.super_timer = 0
+            # super() 形态下的碰撞冷却
+            if self.super_collision_cooldown > 0:
+                self.super_collision_cooldown -= 1
         
         # 更新冻结状态
         if self.is_frozen:
@@ -227,7 +243,110 @@ class Player:
         self.is_reversed = True
         self.reverse_timer = REVERSED_DURATION
     
+    def activate_super(self):
+        """激活 super() 形态"""
+        self.is_super = True
+        self.super_timer = self.super_duration
+        self.skill = None  # 清除其他技能
+    
+    def check_super_collision(self, other_player):
+        """检查 super() 形态下是否与对方碰撞"""
+        if not self.is_super or self.super_collision_cooldown > 0:
+            return False
+        
+        # 计算膨胀后的碰撞范围
+        scale = 2.0
+        expanded_width = self.width * scale
+        expanded_height = self.height * scale
+        expanded_x = self.x - (expanded_width - self.width) / 2
+        expanded_y = self.y - (expanded_height - self.height) / 2
+        
+        # 检查是否与对方碰撞
+        if (expanded_x < other_player.x + other_player.width and
+            expanded_x + expanded_width > other_player.x and
+            expanded_y < other_player.y + other_player.height and
+            expanded_y + expanded_height > other_player.y):
+            return True
+        
+        return False
+    
     def draw(self, screen):
+        # super() 形态绘制
+        if self.is_super:
+            import math
+            
+            # 绘制紫色光芒外环（多层光晕）
+            glow_radius = int(self.width * 1.2)
+            for i in range(3):
+                alpha = int(100 * (1 - i / 3))
+                glow_surf = pygame.Surface((glow_radius * 2 + i * 8, glow_radius * 2 + i * 8), pygame.SRCALPHA)
+                glow_color = (200, 100, 255, alpha)
+                pygame.draw.circle(glow_surf, glow_color, 
+                                 (glow_radius + i * 4, glow_radius + i * 4), 
+                                 glow_radius + i * 4)
+                glow_rect = glow_surf.get_rect(center=(int(self.x + self.width // 2), 
+                                                       int(self.y + self.height // 2)))
+                screen.blit(glow_surf, glow_rect)
+            
+            # 绘制膨胀的玩家（2倍大小）
+            scale = 2.0
+            # 最后1秒闪烁效果
+            if self.super_timer < 60 and (self.super_timer // 10) % 2 == 0:
+                scale = 1.8
+            
+            expanded_width = int(self.width * scale)
+            expanded_height = int(self.height * scale)
+            expand_offset_x = (expanded_width - self.width) / 2
+            expand_offset_y = (expanded_height - self.height) / 2
+            
+            super_rect = pygame.Rect(
+                int(self.x - expand_offset_x),
+                int(self.y - expand_offset_y),
+                expanded_width,
+                expanded_height
+            )
+            
+            # 绘制膨胀的头像或方块
+            if self.use_image and self.current_image:
+                try:
+                    expanded_img = pygame.transform.smoothscale(self.current_image, 
+                                                               (expanded_width, expanded_height))
+                    if not self.facing_right:
+                        expanded_img = pygame.transform.flip(expanded_img, True, False)
+                    screen.blit(expanded_img, super_rect.topleft)
+                except:
+                    super_color = (min(255, self.color[0] + 50),
+                                 min(255, self.color[1] + 50),
+                                 min(255, self.color[2] + 50))
+                    pygame.draw.rect(screen, super_color, super_rect)
+            else:
+                super_color = (min(255, self.color[0] + 50),
+                             min(255, self.color[1] + 50),
+                             min(255, self.color[2] + 50))
+                pygame.draw.rect(screen, super_color, super_rect)
+            
+            # 绘制紫色边框
+            pygame.draw.rect(screen, (200, 100, 255), super_rect, 3)
+            
+            # 绘制倒计时
+            super_seconds = self.super_timer // 60 + 1
+            super_text = font_tiny.render(f"SUPER: {super_seconds}s", True, (200, 100, 255))
+            text_rect = super_text.get_rect(center=(int(self.x + self.width // 2), 
+                                                    int(self.y - 40)))
+            screen.blit(super_text, text_rect)
+            
+            # 绘制旋转星星装饰
+            star_count = 8
+            for i in range(star_count):
+                angle = (360 / star_count) * i + (pygame.time.get_ticks() % 360) * 2
+                rad = math.radians(angle)
+                star_dist = int(self.width * 0.7)
+                star_x = int(self.x + self.width // 2 + math.cos(rad) * star_dist)
+                star_y = int(self.y + self.height // 2 + math.sin(rad) * star_dist)
+                pygame.draw.circle(screen, (255, 215, 0), (star_x, star_y), 3)
+            
+            return  # super() 形态下提前返回，不绘制其他效果
+        
         # 反转状态效果（红色边框闪烁）
         if self.is_reversed:
             # 绘制反转指示边框

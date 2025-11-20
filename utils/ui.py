@@ -71,6 +71,7 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
         ("pow(): Attack 8HP", ORANGE),
         ("delete: Remove skill", RED),
         ("print: Shoot 2HP", YELLOW),
+        ("super(): Giant 5s", (200, 100, 255)),
         ("Ctrl+C: Freeze 3s", CYAN),
         ("TypeError: Reverse 10s", DARK_RED)
     ]
