@@ -12,6 +12,7 @@ from entities.projectile import Projectile
 from entities.platform import KeyPlatform
 from final.score import play_score_animation
 from Backround import backround_1 as background
+from Start.StartGame import run_start
 
 try:
     # Enable faulthandler to dump tracebacks on crashes (SIGSEGV) for debugging
@@ -217,70 +218,48 @@ def main():
             # if settings not available, ignore; errors will surface later
             pass
     
-    while start:
-        screen.fill(BG_COLOR)
-        # DEBUG: sanity checks for font before rendering
-        try:
-            print('DEBUG font_large type:', type(font_large), 'hasattr render:', hasattr(font_large, 'render'))
-            print('DEBUG text length:', len('King of Python'))
-        except Exception:
-            pass
-        title = font_large.render('King of Python', True, UI_PURPLE)
-        sub = font_small.render('Press SPACE to capture faces, S to skip and start', True, UI_PURPLE)
-        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 100))
-        screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT//2 + 20))
-        pygame.display.flip()
-        
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                start = False
-                pygame.quit()
-                sys.exit()
-            elif ev.type == pygame.VIDEORESIZE:
-                # recreate main display and update background target
-                try:
-                    WIDTH, HEIGHT = ev.w, ev.h
-                    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-                    background.set_surface(screen)
-                except Exception:
-                    pass
-            if ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_SPACE and (capture_two_and_make_sprites is not None or capture_and_make_sprite is not None):
-                    # Prefer a single-shot two-face capture if available
-                    if capture_two_and_make_sprites is not None:
-                        try:
-                            p1, p2 = capture_two_and_make_sprites('Face1', 'Face2')
-                        except KeyboardInterrupt:
-                            # user aborted capture (Ctrl+C) - skip avatar capture
-                            p1 = None
-                            p2 = None
-                        except Exception:
-                            # fallback to sequential captures if batch capture fails
-                            try:
-                                p1 = capture_and_make_sprite('Face1') if capture_and_make_sprite else None
-                            except Exception:
-                                p1 = None
-                            time.sleep(1.0)
-                            try:
-                                p2 = capture_and_make_sprite('Face2') if capture_and_make_sprite else None
-                            except Exception:
-                                p2 = None
-                    else:
-                        try:
-                            p1 = capture_and_make_sprite('Face1')
-                        except Exception:
-                            p1 = None
-                        time.sleep(1.0)
-                        try:
-                            p2 = capture_and_make_sprite('Face2')
-                        except Exception:
-                            p2 = None
+    # Use the new Start screen module to show a stylized start menu.
+    try:
+        action = run_start(screen, clock)
+    except SystemExit:
+        pygame.quit()
+        sys.exit()
 
-                    local_p1 = load_avatar_surface(p1)
-                    local_p2 = load_avatar_surface(p2)
-                    start = False
-                if ev.key == pygame.K_s:
-                    start = False
+    # If user chose to capture, run the capture flow (same as before)
+    if action == 'capture' and (capture_two_and_make_sprites is not None or capture_and_make_sprite is not None):
+        if capture_two_and_make_sprites is not None:
+            try:
+                p1, p2 = capture_two_and_make_sprites('Face1', 'Face2')
+            except KeyboardInterrupt:
+                p1 = None
+                p2 = None
+            except Exception:
+                try:
+                    p1 = capture_and_make_sprite('Face1') if capture_and_make_sprite else None
+                except Exception:
+                    p1 = None
+                time.sleep(1.0)
+                try:
+                    p2 = capture_and_make_sprite('Face2') if capture_and_make_sprite else None
+                except Exception:
+                    p2 = None
+        else:
+            try:
+                p1 = capture_and_make_sprite('Face1')
+            except Exception:
+                p1 = None
+            time.sleep(1.0)
+            try:
+                p2 = capture_and_make_sprite('Face2')
+            except Exception:
+                p2 = None
+
+        local_p1 = load_avatar_surface(p1)
+        local_p2 = load_avatar_surface(p2)
+    else:
+        # either user skipped or capture unavailable
+        local_p1 = None
+        local_p2 = None
     
     # 创建键盘平台
     platforms = create_keyboard_platforms()
