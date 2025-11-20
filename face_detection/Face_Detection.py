@@ -606,9 +606,19 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
 
             # show live frame while waiting for two faces
             try:
-                cv2.putText(frame, 'Waiting for 2 faces...', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200,200,200), 2)
+                # Draw the waiting label as an annotation so it remains readable
+                # even when the preview is mirrored
+                wait_ann = {
+                    'text': 'Waiting for 2 faces...',
+                    'pos': (10, 30),
+                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                    'scale': 0.9,
+                    'color': (200, 200, 200),
+                    'thickness': 2,
+                    'outline': True,
+                }
             except Exception:
-                pass
+                wait_ann = None
             # if faces dropped, show last_boxes for a short hold to avoid flicker
             if last_boxes is not None and len(faces) < 2:
                 if last_seen < hold_frames:
@@ -616,13 +626,14 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     (bx1, by1, bw1, bh1), (bx2, by2, bw2, bh2) = last_boxes
                     cv2.rectangle(fb, (bx1, by1), (bx1 + bw1, by1 + bh1), (0, 200, 0), 2)
                     cv2.rectangle(fb, (bx2, by2), (bx2 + bw2, by2 + bh2), (0, 200, 0), 2)
-                    imshow_mirror('Face Capture', fb)
+                    # pass the waiting annotation to imshow_mirror so text is drawn after flip
+                    imshow_mirror('Face Capture', fb, annotations=[wait_ann] if wait_ann else None)
                     last_seen += 1
                 else:
                     last_boxes = None
-                    imshow_mirror('Face Capture', frame)
+                    imshow_mirror('Face Capture', frame, annotations=[wait_ann] if wait_ann else None)
             else:
-                imshow_mirror('Face Capture', frame)
+                imshow_mirror('Face Capture', frame, annotations=[wait_ann] if wait_ann else None)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
     finally:
