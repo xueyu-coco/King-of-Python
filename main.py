@@ -155,37 +155,33 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     # 计算图标和文字的参数
     icon_radius = 6
     icon_text_gap = 8
+    item_spacing = 20  # 每个技能项之间的间隔
     
     # 预渲染所有文字并计算每个技能项的宽度
     skill_items = []
-    max_item_width = 0
+    total_content_width = 0
     for text, color in skill_infos:
         skill_text = font_tiny.render(text, True, WHITE)
         item_width = icon_radius * 2 + icon_text_gap + skill_text.get_width()
         skill_items.append((skill_text, color, item_width))
-        max_item_width = max(max_item_width, item_width)
+        total_content_width += item_width
     
-    # 计算等间距排列：每个技能项占用相同宽度
-    num_skills = len(skill_infos)
-    total_width = WIDTH * 0.95  # 使用屏幕宽度的 95%
-    item_spacing = total_width / num_skills  # 每个技能项占用的总宽度（包含间距）
-    start_x = (WIDTH - total_width) / 2  # 起始 x 坐标，确保整体居中
+    # 加上所有间隔
+    total_content_width += item_spacing * (len(skill_infos) - 1)
+    
+    # 整体居中：从屏幕中心减去总宽度的一半
+    start_x = (WIDTH - total_content_width) / 2
     
     # 绘制每个技能说明
+    current_x = start_x
     for i, (skill_text, color, item_width) in enumerate(skill_items):
-        # 计算当前技能项的中心位置
-        item_center_x = start_x + item_spacing * i + item_spacing / 2
-        
-        # 计算图标和文字的起始位置（在分配的空间内居中）
-        item_start_x = item_center_x - item_width / 2
-        
         # 绘制彩色圆点图标
-        icon_x = int(item_start_x + icon_radius)
+        icon_x = int(current_x + icon_radius)
         icon_y = int(info_y)
         pygame.draw.circle(screen, color, (icon_x, icon_y), icon_radius)
         
         # 绘制技能文字
-        text_x = int(item_start_x + icon_radius * 2 + icon_text_gap)
+        text_x = int(current_x + icon_radius * 2 + icon_text_gap)
         text_y = int(info_y)
         
         # 文字阴影（增强可读性）
@@ -196,6 +192,9 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
         # 主文字
         text_rect = skill_text.get_rect(midleft=(text_x, text_y))
         screen.blit(skill_text, text_rect)
+        
+        # 移动到下一个技能项
+        current_x += item_width + item_spacing
 
 def create_keyboard_platforms():
     """创建键盘主题的平台布局"""
@@ -204,22 +203,22 @@ def create_keyboard_platforms():
     # SPACE键 - 最底部的主平台（超长）
     platforms.append(KeyPlatform(75, HEIGHT - 100, 1050, 38, "SPACE"))
     
-    # QWER 行 - 中层平台
-    platforms.append(KeyPlatform(150, 470, 100, 32, "Q"))
-    platforms.append(KeyPlatform(330, 470, 100, 32, "W"))
-    platforms.append(KeyPlatform(510, 470, 100, 32, "E"))
-    platforms.append(KeyPlatform(870, 470, 100, 32, "R"))
+    # QWER 行 - 中层平台（调整位置，Q 远离 Shift 下方）
+    platforms.append(KeyPlatform(280, 400, 100, 32, "Q"))  # Q 向上移动
+    platforms.append(KeyPlatform(450, 480, 100, 32, "W"))
+    platforms.append(KeyPlatform(620, 460, 100, 32, "E"))  # E 向上移动
+    platforms.append(KeyPlatform(950, 440, 100, 32, "R"))  # R 向上移动并向右移动
     
-    # ASD 行 - 较低层
-    platforms.append(KeyPlatform(225, 560, 100, 32, "A"))
-    platforms.append(KeyPlatform(630, 560, 100, 32, "S"))
-    platforms.append(KeyPlatform(795, 560, 100, 32, "D"))
+    # ASD 行 - 较低层（调整位置和间距）
+    platforms.append(KeyPlatform(180, 570, 100, 32, "A"))
+    platforms.append(KeyPlatform(720, 610, 100, 32, "S"))  # S 向下移动
+    platforms.append(KeyPlatform(900, 570, 100, 32, "D"))
     
-    # Shift键 - 可断裂平台（左侧）
-    platforms.append(KeyPlatform(75, 375, 150, 32, "Shift", is_dynamic=True, is_breakable=True))
+    # Shift键 - 可断裂平台（左侧，碎裂后落空）
+    platforms.append(KeyPlatform(75, 360, 120, 32, "Shift", is_dynamic=True, is_breakable=True))
     
-    # Tab键 - 高层平台
-    platforms.append(KeyPlatform(930, 335, 125, 32, "Tab"))
+    # Tab键 - 高层平台（调整位置）
+    platforms.append(KeyPlatform(1000, 310, 100, 32, "Tab"))
     
     return platforms
 
