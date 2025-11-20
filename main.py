@@ -3,6 +3,8 @@ import sys
 import os
 import random
 import time
+import faulthandler
+import signal
 from settings import *
 from entities.player import Player
 from entities.bubble import Bubble
@@ -12,6 +14,9 @@ from final.score import play_score_animation
 from Backround import backround_1 as background
 
 try:
+    # Enable faulthandler to dump tracebacks on crashes (SIGSEGV) for debugging
+    faulthandler.register(signal.SIGSEGV, all_threads=True)
+    faulthandler.enable()
     HERE = os.path.dirname(__file__)
     REPO_ROOT = os.path.abspath(HERE)
     if REPO_ROOT not in sys.path:
