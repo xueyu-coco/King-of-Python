@@ -396,17 +396,17 @@ def main():
             bubble_timer += 1
             if bubble_timer >= BUBBLE_SPAWN_TIME:
                 x = random.randint(100, WIDTH - 100)
-                # 泡泡生成概率：pow 15%, delete 10%, print 10%, super 50%, ctrlc 5%, typeerror 10%
+                # 泡泡生成概率：pow 20%, delete 12%, print 20%, super 20%, ctrlc 13%, typeerror 15%
                 rand = random.random()
-                if rand < 0.15:
+                if rand < 0.20:
                     btype = 'pow'
-                elif rand < 0.25:
+                elif rand < 0.32:
                     btype = 'delete'
-                elif rand < 0.35:
+                elif rand < 0.52:
                     btype = 'print'
-                elif rand < 0.85:
+                elif rand < 0.72:
                     btype = 'super'
-                elif rand < 0.90:
+                elif rand < 0.85:
                     btype = 'ctrlc'
                 else:
                     btype = 'typeerror'

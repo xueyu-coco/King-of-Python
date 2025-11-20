@@ -38,7 +38,7 @@ class GameState:
         self.bubble_timer += 1
         if self.bubble_timer >= BUBBLE_SPAWN_TIME:
             x = random.randint(100, WIDTH - 100)
-            # 泡泡生成概率：pow 20%, delete 12%, print 20%, super 10%, ctrlc 18%, typeerror 20%
+            # 泡泡生成概率：pow 20%, delete 12%, print 20%, super 20%, ctrlc 13%, typeerror 15%
             rand = random.random()
             if rand < 0.20:
                 btype = 'pow'
@@ -46,9 +46,9 @@ class GameState:
                 btype = 'delete'
             elif rand < 0.52:
                 btype = 'print'
-            elif rand < 0.62:
+            elif rand < 0.72:
                 btype = 'super'
-            elif rand < 0.80:
+            elif rand < 0.85:
                 btype = 'ctrlc'
             else:
                 btype = 'typeerror'
