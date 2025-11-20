@@ -14,6 +14,147 @@ P_HIGHLIGHT = (255, 250, 255)  # near-white highlight for sparkle
 P_TEXT = (80, 40, 110)         # readable but softer dark purple for labels
 
 class KeyPlatform:
+    def _draw_bottom_glow(self, screen, rect):
+        """在键帽底部绘制一条发光的像素条，增强立体感"""
+        # 发光颜色使用外描边同色系
+        base = (193, 104, 255)
+        # 计算发光区域尺寸（像素风的薄条，向下衰减）
+        pad = max(2, self.width // 20)  # 左右扩展少量像素
+        glow_h = max(4, self.height // 10)
+        glow_w = rect.width + pad * 2
+        surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
+
+        # 顶部最亮的1px亮条
+        pygame.draw.rect(surf, (*base, 230), (2, 0, glow_w - 4, 1))
+
+        # 向下逐行降低透明度，形成像素化的发光渐变
+        alphas = [160, 110, 70, 40, 20]
+        for i, a in enumerate(alphas, start=1):
+            if i >= glow_h:
+                break
+            # 稍微左右收缩，保留像素层次感
+            inset = max(0, 2 - i)
+            pygame.draw.rect(surf, (*base, a), (inset, i, glow_w - inset * 2, 1))
+
+        # 将发光条放在键帽底部外侧
+        screen.blit(surf, (rect.x - pad, rect.bottom))
+
+    def _glow_factor(self):
+        """返回发光强度系数。动态平台进行轻微呼吸动画。"""
+        if getattr(self, "is_dynamic", False):
+            t = pygame.time.get_ticks() * 0.006
+            # 0.85 ~ 1.15 的平滑波动
+            return 0.85 + 0.30 * (0.5 * (math.sin(t) + 1.0))
+        return 1.0
+
+    def _draw_edge_glow(self, screen, rect, side):
+        """在指定边绘制像素风发光条: side in ['bottom','top','left','right']。
+        包含第一层亮条和第二层更淡的外扩光晕。"""
+        base = (193, 104, 255)
+        factor = self._glow_factor()
+        base_alphas = [160, 110, 70, 40, 20]
+        alphas = [min(255, max(0, int(a * factor))) for a in base_alphas]
+        second_base = [70, 45, 25, 15]
+        second_alphas = [min(255, max(0, int(a * factor * 0.9))) for a in second_base]
+
+        if side in ("bottom", "top"):
+            # 顶部/底部发光不再超出键帽左右边界
+            glow_h = max(4, self.height // 10)
+            glow_w = rect.width
+            surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
+
+            if side == "bottom":
+                # 靠近键帽边缘处最亮
+                pygame.draw.rect(surf, (*base, min(255, int(230 * factor))), (2, 0, glow_w - 4, 1))
+                for i, a in enumerate(alphas, start=1):
+                    if i >= glow_h:
+                        break
+                    inset = max(0, 2 - i)
+                    pygame.draw.rect(surf, (*base, a), (inset, i, glow_w - inset * 2, 1))
+                screen.blit(surf, (rect.x, rect.bottom))
+                # 第二层更淡的外扩光
+                ext_h = max(2, glow_h // 2)
+                surf2 = pygame.Surface((glow_w, ext_h), pygame.SRCALPHA)
+                for j, a2 in enumerate(second_alphas):
+                    if j >= ext_h:
+                        break
+                    inset2 = max(0, 2 - j)
+                    pygame.draw.rect(surf2, (*base, a2), (inset2, j, glow_w - inset2 * 2, 1))
+                screen.blit(surf2, (rect.x, rect.bottom + glow_h))
+            else:  # top
+                # 亮边靠近键帽底部（surf 底部）
+                pygame.draw.rect(surf, (*base, min(255, int(230 * factor))), (2, glow_h - 1, glow_w - 4, 1))
+                for i, a in enumerate(alphas, start=1):
+                    if i >= glow_h:
+                        break
+                    inset = max(0, 2 - i)
+                    y = glow_h - 1 - i
+                    pygame.draw.rect(surf, (*base, a), (inset, y, glow_w - inset * 2, 1))
+                screen.blit(surf, (rect.x, rect.top - glow_h))
+                # 第二层更淡外扩光（向上）
+                ext_h = max(2, glow_h // 2)
+                surf2 = pygame.Surface((glow_w, ext_h), pygame.SRCALPHA)
+                for j, a2 in enumerate(second_alphas):
+                    if j >= ext_h:
+                        break
+                    inset2 = max(0, 2 - j)
+                    y2 = ext_h - 1 - j
+                    pygame.draw.rect(surf2, (*base, a2), (inset2, y2, glow_w - inset2 * 2, 1))
+                screen.blit(surf2, (rect.x, rect.top - glow_h - ext_h))
+
+        elif side in ("left", "right"):
+            pad_y = max(2, self.height // 20)
+            glow_w = max(4, self.width // 10)
+            glow_h = rect.height + pad_y * 2
+            surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
+
+            if side == "right":
+                # 亮边贴着键帽右侧
+                pygame.draw.rect(surf, (*base, min(255, int(230 * factor))), (0, 2, 1, glow_h - 4))
+                for i, a in enumerate(alphas, start=1):
+                    if i >= glow_w:
+                        break
+                    inset = max(0, 2 - i)
+                    x = i
+                    pygame.draw.rect(surf, (*base, a), (x, inset, 1, glow_h - inset * 2))
+                screen.blit(surf, (rect.right, rect.y - pad_y))
+                # 第二层更淡外扩光（向右）
+                ext_w = max(2, glow_w // 2)
+                surf2 = pygame.Surface((ext_w, glow_h), pygame.SRCALPHA)
+                for j, a2 in enumerate(second_alphas):
+                    if j >= ext_w:
+                        break
+                    inset2 = max(0, 2 - j)
+                    x2 = j
+                    pygame.draw.rect(surf2, (*base, a2), (x2, inset2, 1, glow_h - inset2 * 2))
+                screen.blit(surf2, (rect.right + glow_w, rect.y - pad_y))
+            else:  # left
+                # 亮边贴着键帽左侧（surf 右边界）
+                pygame.draw.rect(surf, (*base, min(255, int(230 * factor))), (glow_w - 1, 2, 1, glow_h - 4))
+                for i, a in enumerate(alphas, start=1):
+                    if i >= glow_w:
+                        break
+                    inset = max(0, 2 - i)
+                    x = glow_w - 1 - i
+                    pygame.draw.rect(surf, (*base, a), (x, inset, 1, glow_h - inset * 2))
+                screen.blit(surf, (rect.left - glow_w, rect.y - pad_y))
+                # 第二层更淡外扩光（向左）
+                ext_w = max(2, glow_w // 2)
+                surf2 = pygame.Surface((ext_w, glow_h), pygame.SRCALPHA)
+                for j, a2 in enumerate(second_alphas):
+                    if j >= ext_w:
+                        break
+                    inset2 = max(0, 2 - j)
+                    x2 = ext_w - 1 - j
+                    pygame.draw.rect(surf2, (*base, a2), (x2, inset2, 1, glow_h - inset2 * 2))
+                screen.blit(surf2, (rect.left - glow_w - ext_w, rect.y - pad_y))
+
+    def _draw_glow_edges(self, screen, rect):
+        """在四周绘制发光像素条"""
+        # 只保留下/上发光，移除左右两侧多出来的竖线
+        self._draw_edge_glow(screen, rect, "bottom")
+        self._draw_edge_glow(screen, rect, "top")
+
     def _draw_ice_texture(self, screen):
         ice_white = P_HIGHLIGHT
         # 随机但固定的冰晶线条（基于平台位置生成）
@@ -214,8 +355,21 @@ class KeyPlatform:
         except Exception:
             pygame.draw.rect(screen, key_color, rect)
 
+        # 紫色像素描边（所有键帽加粗）
+        # space 键使用更粗描边，且不向外延伸；其他键外扩描边，但厚度同样加粗
+        is_space = str(self.label).strip().lower() in ("space", "spacebar", "空格")
+        if is_space:
+            # 使用 2px 厚度且不 inflate，避免外延
+            pygame.draw.rect(screen, (193, 104, 255), rect, 2)
+        else:
+            outline_rect = rect.inflate(2, 2)
+            pygame.draw.rect(screen, (193, 104, 255), outline_rect, 2)
+
         # 细边框（1px）以突出键帽轮廓
         pygame.draw.rect(screen, (max(0, P_SIDE[0]-20), max(0, P_SIDE[1]-20), max(0, P_SIDE[2]-20)), rect, 1)
+
+        # 四周发光像素条（增强立体感）
+        self._draw_glow_edges(screen, rect)
 
         # 如果需要，绘制冰晶纹理（仍然使用单独方法）
         if (self.is_dynamic and self.is_breakable) or self.is_breakable:
