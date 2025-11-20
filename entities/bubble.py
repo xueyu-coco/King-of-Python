@@ -17,6 +17,8 @@ class Bubble:
             self.color = RED
         elif self.type == 'print':
             self.color = YELLOW
+        elif self.type == 'super':
+            self.color = (200, 100, 255)  # 紫色
         elif self.type == 'ctrlc':
             self.color = CYAN
         elif self.type == 'typeerror':
@@ -41,6 +43,8 @@ class Bubble:
             label = 'delete'
         elif self.type == 'print':
             label = 'print'
+        elif self.type == 'super':
+            label = 'super()'
         elif self.type == 'ctrlc':
             label = 'Ctrl+C'
         elif self.type == 'typeerror':
@@ -60,6 +64,16 @@ class Bubble:
                     spark_x = int(self.x + math.cos(rad) * (self.size + 5))
                     spark_y = int(self.y + math.sin(rad) * (self.size + 5))
                     pygame.draw.circle(screen, WHITE, (spark_x, spark_y), 3)
+        
+        # super()泡泡的星星特效
+        if self.type == 'super':
+            star_count = 6
+            for i in range(star_count):
+                angle = (360 / star_count) * i + (pygame.time.get_ticks() % 360) * 2
+                rad = math.radians(angle)
+                star_x = int(self.x + math.cos(rad) * (self.size + 8))
+                star_y = int(self.y + math.sin(rad) * (self.size + 8))
+                pygame.draw.circle(screen, (255, 215, 0), (star_x, star_y), 3)
         
         # TypeError泡泡的混乱特效
         if self.type == 'typeerror':
