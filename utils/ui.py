@@ -62,10 +62,10 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
             ay = 8
         screen.blit(p2_avatar, (ax, ay))
     
-    # 技能说明 - 移到 SPACE 平台下方，水平排列，居中显示
+    # 技能说明 - SPACE 平台下方，等间距水平排列，整体居中
     space_bottom = HEIGHT - 100 + 38
     remaining_space = HEIGHT - space_bottom
-    info_y = space_bottom + remaining_space // 3
+    info_y = space_bottom + remaining_space // 2  # SPACE 底部到屏幕底部的中间位置
     
     skill_infos = [
         ("pow(): Attack 8HP", ORANGE),
@@ -76,44 +76,48 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
         ("TypeError: Reverse 10s", DARK_RED)
     ]
     
-    # 计算每个技能说明的实际宽度
+    # 计算图标和文字的参数
     icon_radius = 6
-    icon_text_gap = 10
-    skill_item_spacing = 20
+    icon_text_gap = 8
     
-    # 预渲染所有文字，计算总宽度
-    rendered_texts = []
-    total_content_width = 0
+    # 预渲染所有文字并计算每个技能项的宽度
+    skill_items = []
+    max_item_width = 0
     for text, color in skill_infos:
         skill_text = font_tiny.render(text, True, WHITE)
-        text_width = skill_text.get_width()
-        item_width = icon_radius * 2 + icon_text_gap + text_width
-        rendered_texts.append((skill_text, text_width))
-        total_content_width += item_width
+        item_width = icon_radius * 2 + icon_text_gap + skill_text.get_width()
+        skill_items.append((skill_text, color, item_width))
+        max_item_width = max(max_item_width, item_width)
     
-    total_content_width += skill_item_spacing * (len(skill_infos) - 1)
-    start_x = (WIDTH - total_content_width) / 2
+    # 计算等间距排列：每个技能项占用相同宽度
+    num_skills = len(skill_infos)
+    total_width = WIDTH * 0.95  # 使用屏幕宽度的 95%
+    item_spacing = total_width / num_skills  # 每个技能项占用的总宽度（包含间距）
+    start_x = (WIDTH - total_width) / 2  # 起始 x 坐标，确保整体居中
     
     # 绘制每个技能说明
-    current_x = start_x
-    for i, ((text, color), (skill_text, text_width)) in enumerate(zip(skill_infos, rendered_texts)):
-        # 绘制彩色圆点
-        icon_x = int(current_x + icon_radius)
-        icon_y = int(info_y + 8)
+    for i, (skill_text, color, item_width) in enumerate(skill_items):
+        # 计算当前技能项的中心位置
+        item_center_x = start_x + item_spacing * i + item_spacing / 2
+        
+        # 计算图标和文字的起始位置（在分配的空间内居中）
+        item_start_x = item_center_x - item_width / 2
+        
+        # 绘制彩色圆点图标
+        icon_x = int(item_start_x + icon_radius)
+        icon_y = int(info_y)
         pygame.draw.circle(screen, color, (icon_x, icon_y), icon_radius)
         
         # 绘制技能文字
-        text_x = int(current_x + icon_radius * 2 + icon_text_gap)
-        text_y = int(info_y + 8)
+        text_x = int(item_start_x + icon_radius * 2 + icon_text_gap)
+        text_y = int(info_y)
         
-        # 文字阴影
-        shadow_text = font_tiny.render(text, True, BLACK)
+        # 文字阴影（增强可读性）
+        shadow_text = font_tiny.render(skill_infos[i][0], True, BLACK)
         shadow_rect = shadow_text.get_rect(midleft=(text_x + 1, text_y + 1))
         screen.blit(shadow_text, shadow_rect)
         
         # 主文字
         text_rect = skill_text.get_rect(midleft=(text_x, text_y))
         screen.blit(skill_text, text_rect)
-        
-        current_x += icon_radius * 2 + icon_text_gap + text_width + skill_item_spacing
 
