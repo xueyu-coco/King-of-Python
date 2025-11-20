@@ -108,6 +108,9 @@ def capture_face_image(wait_seconds=3, label=None):
             if not ret:
                 continue
 
+            # annotations for text drawn after any mirroring (so text stays readable)
+            annotations = []
+
             if HAS_MEDIAPIPE and mp_detector is not None:
                 # MediaPipe expects RGB
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -166,12 +169,20 @@ def capture_face_image(wait_seconds=3, label=None):
                     if dx <= movement_threshold and dy <= movement_threshold:
                         stable = True
 
-                # draw stability hint
+                # draw stability hint as annotation so it remains readable when mirrored
                 status_text = 'Stable' if stable else 'Hold still...'
                 color = (0, 255, 0) if stable else (0, 165, 255)
                 # use smoothed box coords for label placement when available
                 label_x, label_y = (bx, by) if last_box is not None else (x, y)
-                cv2.putText(display, status_text, (label_x, label_y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                annotations.append({
+                    'text': status_text,
+                    'pos': (label_x, label_y - 30),
+                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                    'scale': 0.9,
+                    'color': color,
+                    'thickness': 2,
+                    'outline': True,
+                })
 
                 # show a small circular preview of the face on the top-left
                 face_crop = crop_to_face(frame, (x, y, w, h), pad=0.2)
@@ -193,8 +204,15 @@ def capture_face_image(wait_seconds=3, label=None):
                     try:
                         tx = 10 + w0 + 12
                         ty = 30
-                        cv2.putText(display, lab, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
-                        cv2.putText(display, lab, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                        annotations.append({
+                            'text': lab,
+                            'pos': (tx, ty),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 0.9,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        })
                     except Exception:
                         pass
                 except Exception:
@@ -202,8 +220,15 @@ def capture_face_image(wait_seconds=3, label=None):
                     # still draw a simple label in top-left
                     lab = (label + ' face') if label else 'Face'
                     try:
-                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
-                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                        annotations.append({
+                            'text': lab,
+                            'pos': (10, 30),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 0.9,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        })
                     except Exception:
                         pass
 
@@ -300,11 +325,18 @@ def capture_face_image(wait_seconds=3, label=None):
 
                 else:
                     # show the non-capturing display to user (single window)
-                    # draw a simple label even when preview not present
+                    # draw a simple label via annotations so it isn't mirrored
                     lab = (label + ' face') if label else 'Face'
                     try:
-                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
-                        cv2.putText(display, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                        annotations.append({
+                            'text': lab,
+                            'pos': (10, 30),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 0.9,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        })
                     except Exception:
                         pass
                     # keep showing last_box for a short smooth hold to prevent flicker
@@ -312,18 +344,25 @@ def capture_face_image(wait_seconds=3, label=None):
                         fb = display.copy()
                         bx, by, bw, bh = last_box
                         cv2.rectangle(fb, (bx, by), (bx + bw, by + bh), (0, 200, 0), 2)
-                        imshow_mirror('Face Capture', fb)
+                        imshow_mirror('Face Capture', fb, annotations=annotations)
                         last_seen += 1
                     else:
-                        imshow_mirror('Face Capture', display)
+                        imshow_mirror('Face Capture', display, annotations=annotations)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
             # show the general live camera frame in the same single window (with label)
             try:
                 lab = (label + ' face') if label else 'Face'
-                cv2.putText(frame, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
-                cv2.putText(frame, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                annotations.append({
+                    'text': lab,
+                    'pos': (10, 30),
+                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                    'scale': 0.9,
+                    'color': (255, 255, 255),
+                    'thickness': 2,
+                    'outline': True,
+                })
             except Exception:
                 pass
             # if detection disappeared this frame, optionally show the last_box for a few frames
@@ -334,18 +373,25 @@ def capture_face_image(wait_seconds=3, label=None):
                     fb = frame.copy()
                     cv2.rectangle(fb, (bx, by), (bx + bw, by + bh), (0, 200, 0), 2)
                     try:
-                        cv2.putText(fb, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 4, cv2.LINE_AA)
-                        cv2.putText(fb, lab, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
+                        annotations.append({
+                            'text': lab,
+                            'pos': (10, 30),
+                            'font': cv2.FONT_HERSHEY_SIMPLEX,
+                            'scale': 0.9,
+                            'color': (255, 255, 255),
+                            'thickness': 2,
+                            'outline': True,
+                        })
                     except Exception:
                         pass
-                    imshow_mirror('Face Capture', fb)
+                    imshow_mirror('Face Capture', fb, annotations=annotations)
                     last_seen += 1
                 else:
                     # give up holding after hold_frames
                     last_box = None
-                    imshow_mirror('Face Capture', frame)
+                    imshow_mirror('Face Capture', frame, annotations=annotations)
             else:
-                imshow_mirror('Face Capture', frame)
+                imshow_mirror('Face Capture', frame, annotations=annotations)
             if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
                 break
     finally:
@@ -465,7 +511,18 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
 
                 status_text = f"{'Stable' if (stable1 and stable2) else 'Hold still...'}"
                 color = (0, 255, 0) if (stable1 and stable2) else (0, 165, 255)
-                cv2.putText(display, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                # collect annotations so text is rendered after any mirror flip
+                annotations = [
+                    {
+                        'text': status_text,
+                        'pos': (10, 30),
+                        'font': cv2.FONT_HERSHEY_SIMPLEX,
+                        'scale': 0.9,
+                        'color': color,
+                        'thickness': 2,
+                        'outline': True,
+                    }
+                ]
 
                 # show small previews and labels
                 try:
@@ -483,13 +540,27 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     h0, w0 = c1_np.shape[:2]
                     display[10:10+h0, 10:10+w0] = c1_np
                     display[10:10+h0, -10-w0:-10] = c2_np
-                    # labels
+                    # labels (use annotations so labels are not mirrored)
                     lab1 = (label1 + ' face') if label1 else 'Player 1 face'
                     lab2 = (label2 + ' face') if label2 else 'Player 2 face'
-                    cv2.putText(display, lab1, (10 + w0 + 10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 3, cv2.LINE_AA)
-                    cv2.putText(display, lab1, (10 + w0 + 10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1, cv2.LINE_AA)
-                    cv2.putText(display, lab2, (-10-w0-140, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 3, cv2.LINE_AA)
-                    cv2.putText(display, lab2, (-10-w0-140, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1, cv2.LINE_AA)
+                    annotations.append({
+                        'text': lab1,
+                        'pos': (10 + w0 + 10, 40),
+                        'font': cv2.FONT_HERSHEY_SIMPLEX,
+                        'scale': 0.8,
+                        'color': (255, 255, 255),
+                        'thickness': 1,
+                        'outline': True,
+                    })
+                    annotations.append({
+                        'text': lab2,
+                        'pos': (-10-w0-140, 40),
+                        'font': cv2.FONT_HERSHEY_SIMPLEX,
+                        'scale': 0.8,
+                        'color': (255, 255, 255),
+                        'thickness': 1,
+                        'outline': True,
+                    })
                     display = cv2.cvtColor(display, cv2.COLOR_BGRA2BGR)
                 except Exception:
                     pass
@@ -583,7 +654,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     break
 
                 else:
-                    imshow_mirror('Face Capture', display)
+                    imshow_mirror('Face Capture', display, annotations=annotations)
                     if cv2.waitKey(1) & 0xFF == 27:
                         break
 
