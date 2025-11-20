@@ -174,21 +174,7 @@ class KeyPlatform:
         # 如果已断裂，绘制冰块碎片
         if self.is_broken:
             self._draw_ice_shards(screen)
-            
-            # 显示重生倒计时
-            if self.respawn_timer > 0:
-                respawn_seconds = (self.respawn_time - self.respawn_timer) // FPS + 1
-                respawn_text = font_tiny.render(f"Respawning... {respawn_seconds}s", True, P_PRIMARY)
-                text_rect = respawn_text.get_rect(
-                    center=(self.x + self.width//2, self.y + self.height//2)
-                )
-                # 绘制半透明背景
-                bg_rect = text_rect.inflate(20, 10)
-                s = pygame.Surface((bg_rect.width, bg_rect.height))
-                s.set_alpha(180)
-                s.fill(P_SHADOW)
-                screen.blit(s, bg_rect)
-                screen.blit(respawn_text, text_rect)
+            # 不显示重生倒计时文字，但平台仍会在3秒后重生
             return
         
 

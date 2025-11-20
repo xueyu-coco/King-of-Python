@@ -2,5 +2,6 @@
 face_detection/outputs/
 face_detection/__pycache__
 __pycache__/
+main.py.disk-backup
 REFACTORING.md
 *.pyc
