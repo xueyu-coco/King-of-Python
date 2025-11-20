@@ -43,9 +43,9 @@ PROJECTILE_SPEED = 10
 import os
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'ark-pixel-12px-proportional-zh_cn.otf')
 
-font_large = pygame.font.Font(FONT_PATH, 60)
-font_medium = pygame.font.Font(FONT_PATH, 45)
-font_small = pygame.font.Font(FONT_PATH, 30)
-font_tiny = pygame.font.Font(FONT_PATH, 22)
-font_bubble = pygame.font.Font(FONT_PATH, 20)
-font_key = pygame.font.Font(FONT_PATH, 28)
+font_large = pygame.font.Font(FONT_PATH, 72)  # 开始界面标题
+font_medium = pygame.font.Font(FONT_PATH, 32)  # 开始界面选项
+font_small = pygame.font.Font(FONT_PATH, 24)  # 玩家名称
+font_tiny = pygame.font.Font(FONT_PATH, 18)  # 技能说明
+font_bubble = pygame.font.Font(FONT_PATH, 18)  # 泡泡标签
+font_key = pygame.font.Font(FONT_PATH, 22)  # 键盘平台文字
