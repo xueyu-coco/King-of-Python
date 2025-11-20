@@ -3,8 +3,17 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 import time
 import os
+# --- Stability and detection config ---
+MIN_BOX_CHANGE = 8         # 边框变化小于此像素不更新
+MIN_FACE_SIZE = 80         # 检测最小人脸尺寸
+STABLE_REQUIRED = 8        # 稳定帧数要求
+MOVEMENT_THRESHOLD = 12    # 稳定判定最大移动像素
+HOLD_FRAMES_SINGLE = 12    # 单人脸hold帧数
+HOLD_FRAMES_TWO = 16       # 双人脸hold帧数
+SMOOTH_ALPHA_SINGLE = 0.35 # 单人脸平滑系数
+SMOOTH_ALPHA_TWO = 0.28    # 双人脸平滑系数
 
-# Try to import MediaPipe; if unavailable we'll fall back to OpenCV Haar cascade
+# Try to import mediapipe; if unavailable we'll fall back to OpenCV Haar cascade
 try:
     import mediapipe as mp
     HAS_MEDIAPIPE = True
@@ -71,6 +80,7 @@ def imshow_mirror(window_name, img, mirror=True, annotations=None):
                 cv2.putText(shown, text, (x, y), font, scale, color, thickness, cv2.LINE_AA)
 
         cv2.imshow(window_name, shown)
+        # imshow_mirror: drawing done, no extra processing here
     except Exception:
         try:
             cv2.imshow(window_name, img)
@@ -94,14 +104,14 @@ def capture_face_image(wait_seconds=3, label=None):
     try:
         # stability tracking: keep recent centers
         recent_centers = []
-        stable_required = 18  # number of frames with low movement (increase for clearer stillness)
-        movement_threshold = 4  # pixels (smaller threshold -> require less movement)
+        stable_required = STABLE_REQUIRED  # number of frames with low movement required
+        movement_threshold = MOVEMENT_THRESHOLD  # pixels threshold for motion
 
         # smoothing / hold parameters to avoid flicker when detection is intermittent
         last_box = None  # (x, y, w, h) last drawn box
         last_seen = 0
-        hold_frames = 12  # number of frames to keep showing last_box when detection is lost
-        smooth_alpha = 0.28  # smoothing factor (lower -> smoother / less jitter)
+        hold_frames = HOLD_FRAMES_SINGLE
+        smooth_alpha = SMOOTH_ALPHA_SINGLE
 
         while True:
             ret, frame = cap.read()
@@ -126,7 +136,7 @@ def capture_face_image(wait_seconds=3, label=None):
                         faces.append((x, y, w, h))
             else:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(MIN_FACE_SIZE, MIN_FACE_SIZE))
 
             display = frame.copy()
 
@@ -151,6 +161,15 @@ def capture_face_image(wait_seconds=3, label=None):
                     sy = int(ly * (1 - smooth_alpha) + y * smooth_alpha)
                     sw = int(lw * (1 - smooth_alpha) + w * smooth_alpha)
                     sh = int(lh * (1 - smooth_alpha) + h * smooth_alpha)
+                    # deadzone: ignore tiny changes to prevent jitter
+                    if abs(sx - lx) < MIN_BOX_CHANGE:
+                        sx = lx
+                    if abs(sy - ly) < MIN_BOX_CHANGE:
+                        sy = ly
+                    if abs(sw - lw) < MIN_BOX_CHANGE:
+                        sw = lw
+                    if abs(sh - lh) < MIN_BOX_CHANGE:
+                        sh = lh
                     smooth_box = (sx, sy, sw, sh)
 
                 last_box = smooth_box
@@ -423,15 +442,19 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
     captured = None
     try:
         recent_centers = []
-        # require longer stability window and lower motion threshold for two faces
-        stable_required = 18
-        movement_threshold = 4
+        stable_required = STABLE_REQUIRED
+        movement_threshold = MOVEMENT_THRESHOLD
 
-        # smoothing/hold for two-face mode
         last_boxes = None  # [(x1,y1,w1,h1),(x2,y2,w2,h2)]
         last_seen = 0
-        hold_frames = 12
-        smooth_alpha = 0.28
+        hold_frames = HOLD_FRAMES_TWO
+        smooth_alpha = SMOOTH_ALPHA_TWO
+
+        # cache last display, previews, and annotations for hold logic
+        last_preview1 = None
+        last_preview2 = None
+        last_display = None
+        last_annotations = None
 
         while True:
             ret, frame = cap.read()
@@ -452,47 +475,66 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         faces.append((x, y, w, h))
             else:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
+                faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(MIN_FACE_SIZE, MIN_FACE_SIZE)))
 
 
             if len(faces) >= 2:
-                # choose two largest faces
-                faces = sorted(faces, key=lambda r: r[2] * r[3], reverse=True)[:2]
-                (x1, y1, w1, h1), (x2, y2, w2, h2) = faces
-
-                # smooth boxes if we have previous ones
+                # 始终按x坐标排序，左边的脸是player1，右边是player2
+                cand = sorted(faces, key=lambda r: r[0])[:2]
+                (x1, y1, w1, h1), (x2, y2, w2, h2) = cand
+                # 稳定性处理（平滑+deadzone）
                 if last_boxes is None:
                     sb1 = (x1, y1, w1, h1)
                     sb2 = (x2, y2, w2, h2)
                 else:
-                    lx1, ly1, lw1, lh1 = last_boxes[0]
-                    lx2, ly2, lw2, lh2 = last_boxes[1]
-                    sb1 = (int(lx1 * (1 - smooth_alpha) + x1 * smooth_alpha),
-                           int(ly1 * (1 - smooth_alpha) + y1 * smooth_alpha),
-                           int(lw1 * (1 - smooth_alpha) + w1 * smooth_alpha),
-                           int(lh1 * (1 - smooth_alpha) + h1 * smooth_alpha))
-                    sb2 = (int(lx2 * (1 - smooth_alpha) + x2 * smooth_alpha),
-                           int(ly2 * (1 - smooth_alpha) + y2 * smooth_alpha),
-                           int(lw2 * (1 - smooth_alpha) + w2 * smooth_alpha),
-                           int(lh2 * (1 - smooth_alpha) + h2 * smooth_alpha))
+                    (lx1, ly1, lw1, lh1), (lx2, ly2, lw2, lh2) = last_boxes
+                    def smooth_box(x, y, w, h, lx, ly, lw, lh):
+                        sx = int(lx * (1 - smooth_alpha) + x * smooth_alpha)
+                        sy = int(ly * (1 - smooth_alpha) + y * smooth_alpha)
+                        sw = int(lw * (1 - smooth_alpha) + w * smooth_alpha)
+                        sh = int(lh * (1 - smooth_alpha) + h * smooth_alpha)
+                        if abs(sx - lx) < MIN_BOX_CHANGE:
+                            sx = lx
+                        if abs(sy - ly) < MIN_BOX_CHANGE:
+                            sy = ly
+                        if abs(sw - lw) < MIN_BOX_CHANGE:
+                            sw = lw
+                        if abs(sh - lh) < MIN_BOX_CHANGE:
+                            sh = lh
+                        return (sx, sy, sw, sh)
+                    sb1 = smooth_box(x1, y1, w1, h1, lx1, ly1, lw1, lh1)
+                    sb2 = smooth_box(x2, y2, w2, h2, lx2, ly2, lw2, lh2)
+
+                # update previews only if faces detected和稳定，否则hold之前的
+                try:
+                    crop1 = crop_to_face(frame, (x1, y1, w1, h1), pad=0.2)
+                    crop2 = crop_to_face(frame, (x2, y2, w2, h2), pad=0.2)
+                    p1 = Image.fromarray(cv2.cvtColor(crop1, cv2.COLOR_BGR2RGB))
+                    p2 = Image.fromarray(cv2.cvtColor(crop2, cv2.COLOR_BGR2RGB))
+                    c1 = circular_mask_image(p1).resize((100, 100))
+                    c2 = circular_mask_image(p2).resize((100, 100))
+                    c1_np = cv2.cvtColor(np.array(c1), cv2.COLOR_RGBA2BGRA)
+                    c2_np = cv2.cvtColor(np.array(c2), cv2.COLOR_RGBA2BGRA)
+                    last_preview1 = c1_np
+                    last_preview2 = c2_np
+                except Exception:
+                    pass
+
                 last_boxes = (sb1, sb2)
                 last_seen = 0
 
-                display = frame.copy()
+                # use smoothed boxes for display and for stability tracking
                 x1, y1, w1, h1 = sb1
                 x2, y2, w2, h2 = sb2
+                display = frame.copy()
                 cv2.rectangle(display, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
                 cv2.rectangle(display, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
-                
+
                 cx1, cy1 = x1 + w1 // 2, y1 + h1 // 2
                 cx2, cy2 = x2 + w2 // 2, y2 + h2 // 2
                 recent_centers.append(((cx1, cy1), (cx2, cy2)))
                 if len(recent_centers) > stable_required:
                     recent_centers.pop(0)
-
-                display = frame.copy()
-                cv2.rectangle(display, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
-                cv2.rectangle(display, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
 
                 stable1 = stable2 = False
                 if len(recent_centers) >= stable_required:
@@ -524,28 +566,25 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     }
                 ]
 
-                # show small previews and labels
+                # show small previews and labels (始终左边player1，右边player2)
                 try:
-                    crop1 = crop_to_face(frame, (x1, y1, w1, h1), pad=0.2)
-                    crop2 = crop_to_face(frame, (x2, y2, w2, h2), pad=0.2)
-                    p1 = Image.fromarray(cv2.cvtColor(crop1, cv2.COLOR_BGR2RGB))
-                    p2 = Image.fromarray(cv2.cvtColor(crop2, cv2.COLOR_BGR2RGB))
-                    c1 = circular_mask_image(p1).resize((100, 100))
-                    c2 = circular_mask_image(p2).resize((100, 100))
-                    c1_np = cv2.cvtColor(np.array(c1), cv2.COLOR_RGBA2BGRA)
-                    c2_np = cv2.cvtColor(np.array(c2), cv2.COLOR_RGBA2BGRA)
-                    # place them top-left and top-right
                     if display.shape[2] == 3:
                         display = cv2.cvtColor(display, cv2.COLOR_BGR2BGRA)
-                    h0, w0 = c1_np.shape[:2]
-                    display[10:10+h0, 10:10+w0] = c1_np
-                    display[10:10+h0, -10-w0:-10] = c2_np
-                    # labels (use annotations so labels are not mirrored)
+                    # player1预览（左上）
+                    if last_preview1 is not None:
+                        h0, w0 = last_preview1.shape[:2]
+                        display[10:10+h0, 10:10+w0] = last_preview1
+                    # player2预览（右上）
+                    if last_preview2 is not None:
+                        h0, w0 = last_preview2.shape[:2]
+                        x0 = max(0, display.shape[1] - 10 - w0)
+                        display[10:10+h0, x0:x0+w0] = last_preview2
+                    # 标签
                     lab1 = (label1 + ' face') if label1 else 'Player 1 face'
                     lab2 = (label2 + ' face') if label2 else 'Player 2 face'
                     annotations.append({
                         'text': lab1,
-                        'pos': (10 + w0 + 10, 40),
+                        'pos': (10 + 110, 40),
                         'font': cv2.FONT_HERSHEY_SIMPLEX,
                         'scale': 0.8,
                         'color': (255, 255, 255),
@@ -554,7 +593,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     })
                     annotations.append({
                         'text': lab2,
-                        'pos': (-10-w0-140, 40),
+                        'pos': (display.shape[1] - 110 - 40, 40),
                         'font': cv2.FONT_HERSHEY_SIMPLEX,
                         'scale': 0.8,
                         'color': (255, 255, 255),
@@ -564,6 +603,9 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     display = cv2.cvtColor(display, cv2.COLOR_BGRA2BGR)
                 except Exception:
                     pass
+
+                last_display = display.copy()
+                last_annotations = list(annotations)
 
                 # ensure both faces fully in frame
                 margin = 5
@@ -576,27 +618,29 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         disp_ready = frame.copy()
                         cv2.rectangle(disp_ready, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
                         cv2.rectangle(disp_ready, (x2, y2), (x2 + w2, y2 + h2), (0, 255, 0), 2)
-                        try:
-                            if disp_ready.shape[2] == 3:
-                                overlay = cv2.cvtColor(disp_ready.copy(), cv2.COLOR_BGR2BGRA)
-                            else:
-                                overlay = disp_ready.copy()
-                            overlay[10:10+h0, 10:10+w0] = c1_np
-                            overlay[10:10+h0, -10-w0:-10] = c2_np
-                            disp_ready = cv2.cvtColor(overlay, cv2.COLOR_BGRA2BGR)
-                        except Exception:
-                            pass
+                        # draw previews, clamp to image bounds
+                        if disp_ready.shape[2] == 3:
+                            disp_ready = cv2.cvtColor(disp_ready, cv2.COLOR_BGR2BGRA)
+                        if last_preview1 is not None:
+                            h0, w0 = last_preview1.shape[:2]
+                            y0, x0 = 10, 10
+                            if y0 + h0 <= disp_ready.shape[0] and x0 + w0 <= disp_ready.shape[1]:
+                                disp_ready[y0:y0+h0, x0:x0+w0] = last_preview1
+                        if last_preview2 is not None:
+                            h0, w0 = last_preview2.shape[:2]
+                            y0 = 10
+                            x0 = max(0, disp_ready.shape[1] - 10 - w0)
+                            if y0 + h0 <= disp_ready.shape[0] and x0 + w0 <= disp_ready.shape[1]:
+                                disp_ready[y0:y0+h0, x0:x0+w0] = last_preview2
+                        disp_ready = cv2.cvtColor(disp_ready, cv2.COLOR_BGRA2BGR)
                         cx = frame.shape[1] // 2
                         cy = frame.shape[0] // 2
-                        # don't paint the ready text onto the image; use annotation so text
-                        # is drawn after mirroring and remains readable
                     except Exception:
                         disp_ready = display.copy()
-
-                    # two-face ready display: show unmirrored in separate window so main preview
-                    # remains active and doesn't overwrite the countdown
+                        cx = frame.shape[1] // 2
+                        cy = frame.shape[0] // 2
                     ready_win = 'Face Capture - Ready'
-                    annotations = [
+                    annotations_ready = [
                         {
                             'text': 'ready to take picture',
                             'pos': (cx - 200, cy - 20),
@@ -607,7 +651,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                             'outline': True,
                         }
                     ]
-                    imshow_mirror(ready_win, disp_ready, mirror=True, annotations=annotations)
+                    imshow_mirror(ready_win, disp_ready, mirror=True, annotations=annotations_ready)
                     if cv2.waitKey(1000) & 0xFF == 27:
                         try:
                             cv2.destroyWindow(ready_win)
@@ -618,8 +662,6 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                     for s in range(wait_seconds, 0, -1):
                         try:
                             disp2 = disp_ready.copy()
-                            cx = frame.shape[1] // 2
-                            cy = frame.shape[0] // 2
                             ann = {
                                 'text': str(s),
                                 'pos': (cx - 30, cy + 40),
@@ -659,21 +701,15 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         break
 
             # show live frame while waiting for two faces
-            try:
-                cv2.putText(frame, 'Waiting for 2 faces...', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200,200,200), 2)
-            except Exception:
-                pass
-            # if faces dropped, show last_boxes for a short hold to avoid flicker
-            if last_boxes is not None and len(faces) < 2:
-                if last_seen < hold_frames:
-                    fb = frame.copy()
-                    (bx1, by1, bw1, bh1), (bx2, by2, bw2, bh2) = last_boxes
-                    cv2.rectangle(fb, (bx1, by1), (bx1 + bw1, by1 + bh1), (0, 200, 0), 2)
-                    cv2.rectangle(fb, (bx2, by2), (bx2 + bw2, by2 + bh2), (0, 200, 0), 2)
-                    imshow_mirror('Face Capture', fb)
+            if last_display is not None and last_annotations is not None and last_boxes is not None and len(faces) < 2:
+                # hold时间加长，减少闪烁
+                if last_seen < hold_frames * 2:
+                    imshow_mirror('Face Capture', last_display, annotations=last_annotations)
                     last_seen += 1
                 else:
                     last_boxes = None
+                    last_display = None
+                    last_annotations = None
                     imshow_mirror('Face Capture', frame)
             else:
                 imshow_mirror('Face Capture', frame)
@@ -688,7 +724,7 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
 
     # recompute faces on the captured frame to return accurate boxes
     gray = cv2.cvtColor(captured, cv2.COLOR_BGR2GRAY)
-    faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)))
+    faces = list(face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(MIN_FACE_SIZE, MIN_FACE_SIZE)))
     if len(faces) < 2:
         # fallback: return the two previously found areas (best-effort)
         return captured, []
