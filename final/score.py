@@ -32,14 +32,16 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             cx = center_x + (i - 1) * 120
             pygame.draw.circle(surface, col, (cx, yy), 40)
             pygame.draw.circle(surface, (160, 80, 200), (cx, yy), 44, 4)
-        # 左下角小圆和pac-man
-        pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, inner_rect.bottom - 30), 18)
-        pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, inner_rect.bottom - 40), (inner_rect.left + 100, inner_rect.bottom - 40), (inner_rect.left + 90, inner_rect.bottom - 20)])
-        # 右下角BE HAPPY
+        # 底部左侧小圆和pac-man
+        bottom_y = inner_rect.bottom - 30
+        pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, bottom_y), 18)
+        pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, bottom_y - 10), (inner_rect.left + 100, bottom_y - 10), (inner_rect.left + 90, bottom_y + 10)])
+        # 底部右侧BE HAPPY - 顶部与黄色圆形顶部对齐
         be = font_medium.render('BE HAPPY', True, (160, 255, 220))
-        be_y = inner_rect.bottom - 48
+        circle_top = bottom_y - 18  # 圆形顶部 = 圆心y - 半径
+        be_y = circle_top
         surface.blit(be, (inner_rect.right - be.get_width() - 20, be_y))
-        # 底部说明文字
+        # 底部说明文字（上移一些避免与BE HAPPY重叠）
         sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
         surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
     """Play a short ending animation: winner walks to a computer, sits, and wears a crown.
@@ -135,9 +137,9 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         pygame.draw.rect(screen, KEY_COLOR, monitor_rect)
         pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
 
-        # place big winner text on monitor
+        # place big winner text on monitor - 完全居中
         vt = font_medium.render("VICTORY", True, ORANGE)
-        vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery - 18))
+        vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery))
         screen.blit(vt, vt_rect)
 
         # draw chair (decorative) under the monitor area
