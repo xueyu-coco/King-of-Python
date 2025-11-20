@@ -162,19 +162,20 @@ class KeyPlatform:
                 screen.blit(respawn_text, text_rect)
             return
         
-        # 绘制按键阴影（底部，紫色调）
-        shadow_offset = 5
-        pygame.draw.rect(screen, P_SHADOW, 
-                        (self.x + shadow_offset, self.y + shadow_offset, 
-                         self.width, self.height))
-        
-        # 绘制按键侧面（3D效果，紫色）
-        side_offset = 3
-        pygame.draw.rect(screen, P_SIDE, 
-                        (self.x, self.y + side_offset, 
-                         self.width, self.height))
-        
-        # 绘制按键顶面（紫色调）
+        # 新键帽样式：圆角、浅高光、柔和侧面与投影（颜色保持不变）
+        rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        shadow_offset = 6
+        border_radius = min(12, self.height // 2)
+
+        # 投影（圆角矩形，稍微偏移）
+        shadow_rect = rect.move(shadow_offset, shadow_offset)
+        pygame.draw.rect(screen, P_SHADOW, shadow_rect, border_radius=border_radius)
+
+        # 侧面（通过在 y 方向偏移来模拟厚度）
+        side_rect = rect.move(0, 4)
+        pygame.draw.rect(screen, P_SIDE, side_rect, border_radius=border_radius)
+
+        # 顶面（主面）
         if self.is_dynamic and self.is_breakable:
             key_color = P_LIGHT
         elif self.is_dynamic:
@@ -183,32 +184,38 @@ class KeyPlatform:
             key_color = P_PRIMARY
         else:
             key_color = P_PRIMARY
-            
-        pygame.draw.rect(screen, key_color, 
-                        (self.x, self.y, self.width, self.height))
-        
-        # 绘制冰晶纹理效果
+
+        pygame.draw.rect(screen, key_color, rect, border_radius=border_radius)
+
+        # 顶部高光（使用带 alpha 的短条），让键帽看起来更亮
+        try:
+            glow_w = max(4, self.width - 12)
+            glow_h = max(4, self.height // 4)
+            glow_surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
+            glow_color = (*P_HIGHLIGHT[:3], 110)
+            glow_surf.fill(glow_color)
+            screen.blit(glow_surf, (self.x + 6, self.y + 6))
+        except Exception:
+            pass
+
+        # 小边缘高光（左上）和深边（右下）以增强立体感
+        pygame.draw.rect(screen, P_HIGHLIGHT, rect.inflate(-self.width//12, -self.height//3), 1, border_radius=max(4, border_radius-4))
+        pygame.draw.rect(screen, (max(0, P_SIDE[0]-20), max(0, P_SIDE[1]-20), max(0, P_SIDE[2]-20)), rect, 2, border_radius=border_radius)
+
+        # 冰晶纹理（断裂时或可断裂时显示）
         if (self.is_dynamic and self.is_breakable) or self.is_breakable:
             self._draw_ice_texture(screen)
-        
-        # 绘制按键边框
-        pygame.draw.rect(screen, BLACK, 
-                        (self.x, self.y, self.width, self.height), 2)
-        
-        # 绘制按键标签（字母） — 使用深紫以保持对比
+
+        # 标签：居中绘制
         label_text = font_key.render(self.label, True, P_TEXT)
-        label_rect = label_text.get_rect(
-            center=(self.x + self.width//2, self.y + self.height//2)
-        )
+        label_rect = label_text.get_rect(center=rect.center)
         screen.blit(label_text, label_rect)
-        
-        # 动态平台额外标识
+
+        # 动态平台额外标识（小箭头）
         if self.is_dynamic:
             arrow = "↕"
             arrow_text = font_tiny.render(arrow, True, P_PRIMARY)
-            arrow_rect = arrow_text.get_rect(
-                center=(self.x + self.width//2, self.y - 15)
-            )
+            arrow_rect = arrow_text.get_rect(center=(self.x + self.width//2, self.y - 12))
             screen.blit(arrow_text, arrow_rect)
     
     def _draw_ice_texture(self, screen):
