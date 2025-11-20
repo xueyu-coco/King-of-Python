@@ -14,6 +14,26 @@ P_HIGHLIGHT = (255, 250, 255)  # near-white highlight for sparkle
 P_TEXT = (80, 40, 110)         # readable but softer dark purple for labels
 
 class KeyPlatform:
+    def _draw_ice_texture(self, screen):
+        ice_white = P_HIGHLIGHT
+        # 随机但固定的冰晶线条（基于平台位置生成）
+        random.seed(int(self.x + self.y))
+        for i in range(5):
+            x1 = self.x + random.randint(5, self.width - 5)
+            y1 = self.y + random.randint(5, self.height - 5)
+            x2 = x1 + random.randint(-20, 20)
+            y2 = y1 + random.randint(-10, 10)
+            # 限制在平台范围内
+            x2 = max(self.x + 5, min(self.x + self.width - 5, x2))
+            y2 = max(self.y + 5, min(self.y + self.height - 5, y2))
+            pygame.draw.line(screen, ice_white, (x1, y1), (x2, y2), 1)
+        # 绘制闪烁的冰晶点
+        if pygame.time.get_ticks() % 1000 < 500:
+            for i in range(3):
+                px = self.x + random.randint(10, self.width - 10)
+                py = self.y + random.randint(5, self.height - 5)
+                pygame.draw.circle(screen, ice_white, (px, py), 2)
+        random.seed()  # 恢复随机种子
     """键盘按键平台类"""
     def __init__(self, x, y, width, height, label, is_dynamic=False, is_breakable=False):
         self.x = x
@@ -141,6 +161,15 @@ class KeyPlatform:
                 player.y + player.height <= self.y + 10)
     
     def draw(self, screen):
+        # 选择主面颜色
+        if self.is_dynamic and self.is_breakable:
+            key_color = P_LIGHT
+        elif self.is_dynamic:
+            key_color = P_LIGHT
+        elif self.is_breakable:
+            key_color = P_PRIMARY
+        else:
+            key_color = P_PRIMARY
         """绘制3D键帽效果"""
         # 如果已断裂，绘制冰块碎片
         if self.is_broken:
@@ -162,62 +191,51 @@ class KeyPlatform:
                 screen.blit(respawn_text, text_rect)
             return
         
-        # 像素化键帽样式：在小画布上用块状矩形绘制，再放大到目标尺寸以获得像素化外观
+
+        # 将所有键帽改回像素风长方形（颜色保持不变）
         rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
-        # 选择一个小像素比例（越大越像素化，但不能太小）
+        # 小画布像素化参数
         PX = 4
         sw = max(6, self.width // PX)
         sh = max(4, self.height // PX)
 
-        # 在小画布上绘制硬边块（使用 SRCALPHA 以支持透明）
         small = pygame.Surface((sw, sh), pygame.SRCALPHA)
         small.fill((0, 0, 0, 0))
 
-        # 根据状态选择主面颜色（直接使用原色）
-        if self.is_dynamic and self.is_breakable:
-            key_color = P_LIGHT
-        elif self.is_dynamic:
-            key_color = P_LIGHT
-        elif self.is_breakable:
-            key_color = P_PRIMARY
-        else:
-            key_color = P_PRIMARY
-
-        # 绘制投影（在右下）
+        # 投影（右下偏移）
         try:
             pygame.draw.rect(small, P_SHADOW, (1, 1, sw - 1, sh - 1))
         except Exception:
             pass
 
-        # 绘制侧面（底部像素条）
+        # 侧面（底部像素条）
         side_h = max(1, sh // 4)
         pygame.draw.rect(small, P_SIDE, (0, sh - side_h, sw, side_h))
 
-        # 绘制顶面（在侧面之上）
+        # 顶面
         top_h = sh - side_h
         pygame.draw.rect(small, key_color, (0, 0, sw, top_h))
 
-        # 画一个简单的高光像素条（左上）
+        # 顶部高光（像素条）
         hl_h = max(1, top_h // 4)
         pygame.draw.rect(small, P_HIGHLIGHT, (1, 1, sw - 2, hl_h))
 
-        # 缩放到目标尺寸（使用最近邻放大以保留像素感）
+        # 缩放到目标尺寸（最近邻放大以保持像素感）
         try:
             scaled = pygame.transform.scale(small, (self.width, self.height))
             screen.blit(scaled, rect.topleft)
         except Exception:
-            # 回退：直接绘制方块（非像素化）
             pygame.draw.rect(screen, key_color, rect)
 
         # 细边框（1px）以突出键帽轮廓
         pygame.draw.rect(screen, (max(0, P_SIDE[0]-20), max(0, P_SIDE[1]-20), max(0, P_SIDE[2]-20)), rect, 1)
 
-        # 如果需要，绘制冰晶纹理
+        # 如果需要，绘制冰晶纹理（仍然使用单独方法）
         if (self.is_dynamic and self.is_breakable) or self.is_breakable:
             self._draw_ice_texture(screen)
 
-        # 标签：居中绘制（像素字体保持原样）
+        # 标签（居中）
         label_text = font_key.render(self.label, True, P_TEXT)
         label_rect = label_text.get_rect(center=rect.center)
         screen.blit(label_text, label_rect)
@@ -228,35 +246,6 @@ class KeyPlatform:
             arrow_text = font_tiny.render(arrow, True, P_PRIMARY)
             arrow_rect = arrow_text.get_rect(center=(self.x + self.width//2, self.y - 12))
             screen.blit(arrow_text, arrow_rect)
-    
-    def _draw_ice_texture(self, screen):
-        """绘制冰晶纹理"""
-        # 绘制细微的冰晶裂纹（紫色高光）
-        ice_white = P_HIGHLIGHT
-        
-        # 随机但固定的冰晶线条（基于平台位置生成）
-        random.seed(int(self.x + self.y))
-        
-        for i in range(5):
-            x1 = self.x + random.randint(5, self.width - 5)
-            y1 = self.y + random.randint(5, self.height - 5)
-            x2 = x1 + random.randint(-20, 20)
-            y2 = y1 + random.randint(-10, 10)
-            
-            # 限制在平台范围内
-            x2 = max(self.x + 5, min(self.x + self.width - 5, x2))
-            y2 = max(self.y + 5, min(self.y + self.height - 5, y2))
-            
-            pygame.draw.line(screen, ice_white, (x1, y1), (x2, y2), 1)
-        
-        # 绘制闪烁的冰晶点
-        if pygame.time.get_ticks() % 1000 < 500:
-            for i in range(3):
-                px = self.x + random.randint(10, self.width - 10)
-                py = self.y + random.randint(5, self.height - 5)
-                pygame.draw.circle(screen, ice_white, (px, py), 2)
-        
-        random.seed()  # 恢复随机种子
     
     def _draw_ice_shards(self, screen):
         """绘制飞散的冰块碎片"""
