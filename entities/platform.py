@@ -162,20 +162,19 @@ class KeyPlatform:
                 screen.blit(respawn_text, text_rect)
             return
         
-        # 新键帽样式：圆角、浅高光、柔和侧面与投影（颜色保持不变）
+        # 像素化键帽样式：在小画布上用块状矩形绘制，再放大到目标尺寸以获得像素化外观
         rect = pygame.Rect(self.x, self.y, self.width, self.height)
-        shadow_offset = 6
-        border_radius = min(12, self.height // 2)
 
-        # 投影（圆角矩形，稍微偏移）
-        shadow_rect = rect.move(shadow_offset, shadow_offset)
-        pygame.draw.rect(screen, P_SHADOW, shadow_rect, border_radius=border_radius)
+        # 选择一个小像素比例（越大越像素化，但不能太小）
+        PX = 4
+        sw = max(6, self.width // PX)
+        sh = max(4, self.height // PX)
 
-        # 侧面（通过在 y 方向偏移来模拟厚度）
-        side_rect = rect.move(0, 4)
-        pygame.draw.rect(screen, P_SIDE, side_rect, border_radius=border_radius)
+        # 在小画布上绘制硬边块（使用 SRCALPHA 以支持透明）
+        small = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        small.fill((0, 0, 0, 0))
 
-        # 顶面（主面）
+        # 根据状态选择主面颜色（直接使用原色）
         if self.is_dynamic and self.is_breakable:
             key_color = P_LIGHT
         elif self.is_dynamic:
@@ -185,28 +184,40 @@ class KeyPlatform:
         else:
             key_color = P_PRIMARY
 
-        pygame.draw.rect(screen, key_color, rect, border_radius=border_radius)
-
-        # 顶部高光（使用带 alpha 的短条），让键帽看起来更亮
+        # 绘制投影（在右下）
         try:
-            glow_w = max(4, self.width - 12)
-            glow_h = max(4, self.height // 4)
-            glow_surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
-            glow_color = (*P_HIGHLIGHT[:3], 110)
-            glow_surf.fill(glow_color)
-            screen.blit(glow_surf, (self.x + 6, self.y + 6))
+            pygame.draw.rect(small, P_SHADOW, (1, 1, sw - 1, sh - 1))
         except Exception:
             pass
 
-        # 小边缘高光（左上）和深边（右下）以增强立体感
-        pygame.draw.rect(screen, P_HIGHLIGHT, rect.inflate(-self.width//12, -self.height//3), 1, border_radius=max(4, border_radius-4))
-        pygame.draw.rect(screen, (max(0, P_SIDE[0]-20), max(0, P_SIDE[1]-20), max(0, P_SIDE[2]-20)), rect, 2, border_radius=border_radius)
+        # 绘制侧面（底部像素条）
+        side_h = max(1, sh // 4)
+        pygame.draw.rect(small, P_SIDE, (0, sh - side_h, sw, side_h))
 
-        # 冰晶纹理（断裂时或可断裂时显示）
+        # 绘制顶面（在侧面之上）
+        top_h = sh - side_h
+        pygame.draw.rect(small, key_color, (0, 0, sw, top_h))
+
+        # 画一个简单的高光像素条（左上）
+        hl_h = max(1, top_h // 4)
+        pygame.draw.rect(small, P_HIGHLIGHT, (1, 1, sw - 2, hl_h))
+
+        # 缩放到目标尺寸（使用最近邻放大以保留像素感）
+        try:
+            scaled = pygame.transform.scale(small, (self.width, self.height))
+            screen.blit(scaled, rect.topleft)
+        except Exception:
+            # 回退：直接绘制方块（非像素化）
+            pygame.draw.rect(screen, key_color, rect)
+
+        # 细边框（1px）以突出键帽轮廓
+        pygame.draw.rect(screen, (max(0, P_SIDE[0]-20), max(0, P_SIDE[1]-20), max(0, P_SIDE[2]-20)), rect, 1)
+
+        # 如果需要，绘制冰晶纹理
         if (self.is_dynamic and self.is_breakable) or self.is_breakable:
             self._draw_ice_texture(screen)
 
-        # 标签：居中绘制
+        # 标签：居中绘制（像素字体保持原样）
         label_text = font_key.render(self.label, True, P_TEXT)
         label_rect = label_text.get_rect(center=rect.center)
         screen.blit(label_text, label_rect)
