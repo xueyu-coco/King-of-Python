@@ -94,14 +94,25 @@ def capture_face_image(wait_seconds=3, label=None):
     try:
         # stability tracking: keep recent centers
         recent_centers = []
-        stable_required = 18  # number of frames with low movement (increase for clearer stillness)
-        movement_threshold = 4  # pixels (smaller threshold -> require less movement)
+
+        # Allow runtime override of "strict" detection via environment variable.
+        # If FACE_STRICT is '0' we relax the thresholds for environments where camera is noisy.
+        face_strict = os.environ.get('FACE_STRICT', '1') != '0'
+        if face_strict:
+            stable_required = 18
+            movement_threshold = 4
+            hold_frames = 12
+            smooth_alpha = 0.28
+        else:
+            # more permissive defaults for debugging / flaky cameras
+            stable_required = 8
+            movement_threshold = 8
+            hold_frames = 8
+            smooth_alpha = 0.45
 
         # smoothing / hold parameters to avoid flicker when detection is intermittent
         last_box = None  # (x, y, w, h) last drawn box
         last_seen = 0
-        hold_frames = 12  # number of frames to keep showing last_box when detection is lost
-        smooth_alpha = 0.28  # smoothing factor (lower -> smoother / less jitter)
 
         while True:
             ret, frame = cap.read()
@@ -165,6 +176,9 @@ def capture_face_image(wait_seconds=3, label=None):
                     # require both axes motion to be small to be considered stable
                     if dx <= movement_threshold and dy <= movement_threshold:
                         stable = True
+                # debug: if camera seems to never reach stable, optionally print status
+                if not stable and len(recent_centers) % 30 == 0:
+                    print(f'[face_debug] label={label} centers={len(recent_centers)} stable={stable} dx={dx if len(recent_centers) else None} dy={dy if len(recent_centers) else None}')
 
                 # draw stability hint
                 status_text = 'Stable' if stable else 'Hold still...'
@@ -462,6 +476,9 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                         stable1 = True
                     if dx2 <= movement_threshold and dy2 <= movement_threshold:
                         stable2 = True
+                # debug: surface periodic status to terminal so user can see why capture not starting
+                if (len(recent_centers) % 30) == 0:
+                    print(f'[face_debug] two_faces centers={len(recent_centers)} stable1={stable1} stable2={stable2} dx1={dx1 if len(recent_centers) else None} dy1={dy1 if len(recent_centers) else None} dx2={dx2 if len(recent_centers) else None} dy2={dy2 if len(recent_centers) else None}')
 
                 status_text = f"{'Stable' if (stable1 and stable2) else 'Hold still...'}"
                 color = (0, 255, 0) if (stable1 and stable2) else (0, 165, 255)
