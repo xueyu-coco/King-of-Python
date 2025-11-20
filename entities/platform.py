@@ -204,13 +204,36 @@ class KeyPlatform:
         """更新动态平台位置和断裂状态"""
         # 动态移动（即使可以断裂也能移动）
         if self.is_dynamic and not self.is_broken:
-            self.y += self.move_speed * self.move_direction
-            
-            # 到达边界时反转方向
-            if self.y <= self.base_y - self.move_range:
-                self.move_direction = 1
-            elif self.y >= self.base_y + self.move_range:
-                self.move_direction = -1
+            # 检查是否有 base_x 属性（水平移动）
+            if hasattr(self, 'base_x'):
+                # 检查是否有玩家站在平台上
+                has_player = False
+                if players:
+                    for player in players:
+                        if self.check_player_standing(player):
+                            has_player = True
+                            break
+                
+                # 根据是否有玩家调整速度
+                current_speed = self.move_speed * 2.5 if has_player else self.move_speed
+                
+                # 水平移动
+                self.x += current_speed * self.move_direction
+                
+                # 到达边界时反转方向
+                if self.x <= self.base_x - self.move_range:
+                    self.move_direction = 1
+                elif self.x >= self.base_x + self.move_range:
+                    self.move_direction = -1
+            else:
+                # 垂直移动
+                self.y += self.move_speed * self.move_direction
+                
+                # 到达边界时反转方向
+                if self.y <= self.base_y - self.move_range:
+                    self.move_direction = 1
+                elif self.y >= self.base_y + self.move_range:
+                    self.move_direction = -1
         
         # 断裂机制
         if self.is_breakable:

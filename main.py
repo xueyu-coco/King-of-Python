@@ -205,8 +205,8 @@ def create_keyboard_platforms():
     
     # QWER 行 - 中层平台（调整位置，Q 远离 Shift 下方）
     platforms.append(KeyPlatform(280, 400, 100, 32, "Q"))  # Q 向上移动
-    platforms.append(KeyPlatform(450, 480, 100, 32, "W"))
-    platforms.append(KeyPlatform(620, 460, 100, 32, "E"))  # E 向上移动
+    platforms.append(KeyPlatform(450, 520, 100, 32, "W"))
+    platforms.append(KeyPlatform(620, 480, 100, 32, "E"))  # E 向上移动
     platforms.append(KeyPlatform(950, 440, 100, 32, "R"))  # R 向上移动并向右移动
     
     # ASD 行 - 较低层（调整位置和间距）
@@ -217,8 +217,13 @@ def create_keyboard_platforms():
     # Shift键 - 可断裂平台（左侧，碎裂后落空）
     platforms.append(KeyPlatform(75, 360, 120, 32, "Shift", is_dynamic=True, is_breakable=True))
     
-    # Tab键 - 高层平台（调整位置）
-    platforms.append(KeyPlatform(1000, 310, 100, 32, "Tab"))
+    # Tab键 - 高层平台（左右移动）
+    tab_platform = KeyPlatform(600, 310, 100, 32, "Tab", is_dynamic=True)
+    tab_platform.move_direction = 1  # 1=右移, -1=左移
+    tab_platform.move_speed = 1.5  # 水平移动速度
+    tab_platform.move_range = 400  # 左右移动范围
+    tab_platform.base_x = 600  # 记录初始x位置
+    platforms.append(tab_platform)
     
     return platforms
 
@@ -371,12 +376,12 @@ def main():
             # 检测 super() 形态碰撞
             if player1.check_super_collision(player2):
                 knockback_dir = 1 if player1.facing_right else -1
-                player2.take_damage(5, knockback_dir * 15)  # 伤害5，击退力度15
+                player2.take_damage(5, knockback_dir * 3)  # 伤害5,击退力度3
                 player1.super_collision_cooldown = 30  # 0.5秒冷却
             
             if player2.check_super_collision(player1):
                 knockback_dir = 1 if player2.facing_right else -1
-                player1.take_damage(5, knockback_dir * 15)  # 伤害5，击退力度15
+                player1.take_damage(5, knockback_dir * 3)  # 伤害5,击退力度3
                 player2.super_collision_cooldown = 30  # 0.5秒冷却
             
             # 检测攻击
@@ -405,11 +410,11 @@ def main():
                     projectiles.remove(proj)
                 else:
                     if proj.check_collision(player1) and proj.owner != player1:
-                        knockback = 10 if proj.direction > 0 else -10
+                        knockback = 1 if proj.direction > 0 else -1
                         player1.take_damage(proj.damage, knockback)
                         projectiles.remove(proj)
                     elif proj.check_collision(player2) and proj.owner != player2:
-                        knockback = 10 if proj.direction > 0 else -10
+                        knockback = 1 if proj.direction > 0 else -1
                         player2.take_damage(proj.damage, knockback)
                         projectiles.remove(proj)
             
@@ -417,17 +422,17 @@ def main():
             bubble_timer += 1
             if bubble_timer >= BUBBLE_SPAWN_TIME:
                 x = random.randint(100, WIDTH - 100)
-                # 泡泡生成概率：pow 20%, delete 12%, print 20%, super 20%, ctrlc 13%, typeerror 15%
+                # 泡泡生成概率：pow 30%, delete 15%, print 10%, super 8%, ctrlc 27%, typeerror 25%
                 rand = random.random()
-                if rand < 0.20:
+                if rand < 0.30:
                     btype = 'pow'
-                elif rand < 0.32:
+                elif rand < 0.45:
                     btype = 'delete'
-                elif rand < 0.52:
+                elif rand < 0.55:
                     btype = 'print'
-                elif rand < 0.72:
+                elif rand < 0.63:
                     btype = 'super'
-                elif rand < 0.85:
+                elif rand < 0.90:
                     btype = 'ctrlc'
                 else:
                     btype = 'typeerror'
