@@ -101,6 +101,7 @@ def capture_face_image(wait_seconds=3, label=None):
     print('Looking for faces. Press Ctrl+C to quit.')
 
     captured = None
+    captured_face_box = None
     try:
         # stability tracking: keep recent centers
         recent_centers = []
@@ -117,6 +118,7 @@ def capture_face_image(wait_seconds=3, label=None):
             ret, frame = cap.read()
             if not ret:
                 continue
+            print("frame")
 
             # annotations for text drawn after any mirroring (so text stays readable)
             annotations = []
@@ -124,7 +126,9 @@ def capture_face_image(wait_seconds=3, label=None):
             if HAS_MEDIAPIPE and mp_detector is not None:
                 # MediaPipe expects RGB
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                print("rgb done")
                 results = mp_detector.process(rgb)
+                print("process done")
                 faces = []
                 if results.detections:
                     for det in results.detections:
@@ -300,46 +304,100 @@ def capture_face_image(wait_seconds=3, label=None):
                             pass
                         break
 
-                    # then perform a numeric countdown (wait_seconds seconds) showing large centered numbers
+                    # then perform a numeric countdown (wait_seconds seconds) while keeping frames fresh
+                    countdown_cancelled = False
                     for s in range(wait_seconds, 0, -1):
-                        try:
-                            disp2 = disp_ready.copy()
-                            cx = frame.shape[1] // 2
-                            cy = frame.shape[0] // 2
-                            # draw the large countdown number as an annotation so it is drawn after flip
-                            ann = {
-                                'text': str(s),
-                                'pos': (cx - 30, cy + 40),
-                                'font': cv2.FONT_HERSHEY_SIMPLEX,
-                                'scale': 3.0,
-                                'color': (0, 255, 0),
-                                'thickness': 4,
-                                'outline': True,
-                            }
-                        except Exception:
-                            disp2 = display.copy()
-                            ann = {
-                                'text': f'Capturing in {s}s',
-                                'pos': (x, y - 10),
-                                'font': cv2.FONT_HERSHEY_SIMPLEX,
-                                'scale': 0.9,
-                                'color': (0, 255, 0),
-                                'thickness': 2,
-                                'outline': True,
-                            }
-                        # countdown frames shown in the separate mirrored window with annotation
-                        imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
-                        if cv2.waitKey(1000) & 0xFF == 27:
+                        second_deadline = time.time() + 1.0
+                        while time.time() < second_deadline:
+                            ret_live, live_frame = cap.read()
+                            if not ret_live:
+                                continue
+                            try:
+                                disp2 = live_frame.copy()
+                                cx_live = live_frame.shape[1] // 2
+                                cy_live = live_frame.shape[0] // 2
+                                ann = {
+                                    'text': str(s),
+                                    'pos': (cx_live - 30, cy_live + 40),
+                                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                    'scale': 3.0,
+                                    'color': (0, 255, 0),
+                                    'thickness': 4,
+                                    'outline': True,
+                                }
+                            except Exception:
+                                disp2 = disp_ready.copy()
+                                ann = {
+                                    'text': f'Capturing in {s}s',
+                                    'pos': (x, y - 10),
+                                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                    'scale': 0.9,
+                                    'color': (0, 255, 0),
+                                    'thickness': 2,
+                                    'outline': True,
+                                }
+                            imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
+                            if cv2.waitKey(1) & 0xFF == 27:
+                                countdown_cancelled = True
+                                break
+                        if countdown_cancelled:
                             try:
                                 cv2.destroyWindow(ready_win)
                             except Exception:
                                 pass
                             break
 
+                    if countdown_cancelled:
+                        continue
+
                     # take one more frame as capture
                     ret2, frame2 = cap.read()
-                    if ret2:
-                        captured = frame2
+                    if not ret2:
+                        continue
+
+                    # ensure the captured frame still has a detectable face
+                    if HAS_MEDIAPIPE and mp_detector is not None:
+                        try:
+                            rgb_final = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)
+                            results_final = mp_detector.process(rgb_final)
+                            faces_final = []
+                            if results_final.detections:
+                                for det in results_final.detections:
+                                    bbox = det.location_data.relative_bounding_box
+                                    fx = int(bbox.xmin * frame2.shape[1])
+                                    fy = int(bbox.ymin * frame2.shape[0])
+                                    fw = int(bbox.width * frame2.shape[1])
+                                    fh = int(bbox.height * frame2.shape[0])
+                                    faces_final.append((fx, fy, fw, fh))
+                        except Exception:
+                            faces_final = []
+                    else:
+                        gray_final = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+                        faces_final = face_cascade.detectMultiScale(
+                            gray_final,
+                            scaleFactor=1.1,
+                            minNeighbors=5,
+                            minSize=(MIN_FACE_SIZE, MIN_FACE_SIZE),
+                        )
+
+                    if isinstance(faces_final, np.ndarray):
+                        faces_final = faces_final.tolist()
+                    elif not isinstance(faces_final, list):
+                        faces_final = list(faces_final)
+                    if len(faces_final) == 0:
+                        try:
+                            cv2.destroyWindow(ready_win)
+                        except Exception:
+                            pass
+                        continue
+
+                    faces_final = sorted(faces_final, key=lambda r: r[2] * r[3], reverse=True)
+                    captured = frame2
+                    captured_face_box = faces_final[0]
+                    try:
+                        cv2.destroyWindow(ready_win)
+                    except Exception:
+                        pass
                     break
 
                 else:
@@ -417,10 +475,10 @@ def capture_face_image(wait_seconds=3, label=None):
         cap.release()
         cv2.destroyAllWindows()
 
-    if captured is None:
+    if captured is None or captured_face_box is None:
         raise RuntimeError('No frame captured')
 
-    return captured, faces[0] if len(faces) > 0 else None
+    return captured, captured_face_box
 
 
 def capture_two_faces(wait_seconds=3, label1=None, label2=None):
@@ -659,40 +717,97 @@ def capture_two_faces(wait_seconds=3, label1=None, label2=None):
                             pass
                         break
 
+                    countdown_cancelled = False
                     for s in range(wait_seconds, 0, -1):
-                        try:
-                            disp2 = disp_ready.copy()
-                            ann = {
-                                'text': str(s),
-                                'pos': (cx - 30, cy + 40),
-                                'font': cv2.FONT_HERSHEY_SIMPLEX,
-                                'scale': 3.0,
-                                'color': (0, 255, 0),
-                                'thickness': 4,
-                                'outline': True,
-                            }
-                        except Exception:
-                            disp2 = display.copy()
-                            ann = {
-                                'text': f'Capturing in {s}s',
-                                'pos': (10, frame.shape[0] - 30),
-                                'font': cv2.FONT_HERSHEY_SIMPLEX,
-                                'scale': 0.9,
-                                'color': (0, 255, 0),
-                                'thickness': 2,
-                                'outline': True,
-                            }
-                        imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
-                        if cv2.waitKey(1000) & 0xFF == 27:
+                        second_deadline = time.time() + 1.0
+                        while time.time() < second_deadline:
+                            ret_live, live_frame = cap.read()
+                            if not ret_live:
+                                continue
+                            try:
+                                disp2 = live_frame.copy()
+                                cx_live = live_frame.shape[1] // 2
+                                cy_live = live_frame.shape[0] // 2
+                                ann = {
+                                    'text': str(s),
+                                    'pos': (cx_live - 30, cy_live + 40),
+                                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                    'scale': 3.0,
+                                    'color': (0, 255, 0),
+                                    'thickness': 4,
+                                    'outline': True,
+                                }
+                            except Exception:
+                                disp2 = disp_ready.copy()
+                                ann = {
+                                    'text': f'Capturing in {s}s',
+                                    'pos': (10, frame.shape[0] - 30),
+                                    'font': cv2.FONT_HERSHEY_SIMPLEX,
+                                    'scale': 0.9,
+                                    'color': (0, 255, 0),
+                                    'thickness': 2,
+                                    'outline': True,
+                                }
+                            imshow_mirror(ready_win, disp2, mirror=True, annotations=[ann])
+                            if cv2.waitKey(1) & 0xFF == 27:
+                                countdown_cancelled = True
+                                break
+                        if countdown_cancelled:
                             try:
                                 cv2.destroyWindow(ready_win)
                             except Exception:
                                 pass
                             break
 
+                    if countdown_cancelled:
+                        continue
+
                     ret2, frame2 = cap.read()
-                    if ret2:
-                        captured = frame2
+                    if not ret2:
+                        continue
+
+                    if HAS_MEDIAPIPE and mp_detector is not None:
+                        try:
+                            rgb_final = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)
+                            results_final = mp_detector.process(rgb_final)
+                            faces_final = []
+                            if results_final.detections:
+                                for det in results_final.detections:
+                                    bbox = det.location_data.relative_bounding_box
+                                    fx = int(bbox.xmin * frame2.shape[1])
+                                    fy = int(bbox.ymin * frame2.shape[0])
+                                    fw = int(bbox.width * frame2.shape[1])
+                                    fh = int(bbox.height * frame2.shape[0])
+                                    faces_final.append((fx, fy, fw, fh))
+                        except Exception:
+                            faces_final = []
+                    else:
+                        gray_final = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+                        faces_final = face_cascade.detectMultiScale(
+                            gray_final,
+                            scaleFactor=1.1,
+                            minNeighbors=5,
+                            minSize=(MIN_FACE_SIZE, MIN_FACE_SIZE),
+                        )
+
+                    if isinstance(faces_final, np.ndarray):
+                        faces_final = faces_final.tolist()
+                    elif not isinstance(faces_final, list):
+                        faces_final = list(faces_final)
+
+                    if len(faces_final) < 2:
+                        try:
+                            cv2.destroyWindow(ready_win)
+                        except Exception:
+                            pass
+                        continue
+
+                    faces_final = sorted(faces_final, key=lambda r: r[2] * r[3], reverse=True)[:2]
+                    captured = frame2
+                    try:
+                        cv2.destroyWindow(ready_win)
+                    except Exception:
+                        pass
                     break
 
                 else:

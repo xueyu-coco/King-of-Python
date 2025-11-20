@@ -25,8 +25,8 @@ def capture_and_make_sprite(player_label, palette_mode='cute'):
         display_label = player_label
 
     # give the user a short pause to get ready before the detection begins
-    print(f'Starting capture for {display_label} in 5 seconds...')
-    time.sleep(5)
+    # print(f'Starting capture for {display_label} in 5 seconds...')
+    # time.sleep(5)
     frame, face = capture_face_image(wait_seconds=3, label=display_label)
     if face is None:
         raise RuntimeError('No face captured')
