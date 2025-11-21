@@ -11,7 +11,7 @@ from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
 from final.score import play_score_animation
-from Backround import backround_1 as background
+from Backround import backround_2 as background
 from Start.StartGame import run_start
 
 try:

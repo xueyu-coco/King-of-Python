@@ -135,7 +135,13 @@ class CharStream:
             # 绘制字符（使用 alpha 调低亮度）
             if 0 <= char['y'] <= ch:
                 # render base text surface
-                text_surf = font.render(char['value'], True, color).convert_alpha()
+                # For pixel fonts, disable antialiasing to keep a crisp/blocky look;
+                # for non-pixel fonts prefer antialiasing for smoother glyphs.
+                try:
+                    antialias = False if module_is_pixel_font else True
+                except Exception:
+                    antialias = True
+                text_surf = font.render(char['value'], antialias, color).convert_alpha()
                 # apply alpha and scale
                 scale = char.get('scale', 1.0)
                 sw = max(1, int(text_surf.get_width() * scale))
@@ -263,14 +269,43 @@ def set_surface(surface):
 
 def main():
     global char_streams
-
     # Standalone runner: initializes pygame and creates a display
+    global module_font, module_is_pixel_font
     pygame.init()
     screen_local = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
     pygame.display.set_caption("Matrix Digital Rain")
 
     # create font
-    font = pygame.font.SysFont('couriernew', font_size, bold=True)
+    # Prefer the project's bundled pixel font for the standalone runner as
+    # well so that standalone visuals match the embedded background when
+    # the pixel font is available. Fall back to courier if not found.
+    font = None
+    try:
+        fonts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fonts'))
+        candidates = glob.glob(os.path.join(fonts_dir, 'ark-pixel-12px-proportional-*.otf'))
+        chosen = None
+        if candidates:
+            for p in candidates:
+                if 'latin' in os.path.basename(p).lower():
+                    chosen = p
+                    break
+            if chosen is None:
+                chosen = candidates[0]
+            font = pygame.font.Font(chosen, font_size)
+            module_font = font
+            module_is_pixel_font = True
+    except Exception:
+        font = None
+
+    if font is None:
+        try:
+            font = pygame.font.SysFont('couriernew', font_size, bold=True)
+            module_font = font
+            module_is_pixel_font = False
+        except Exception:
+            font = pygame.font.Font(None, font_size)
+            module_font = font
+            module_is_pixel_font = False
 
     # set our surface so draw() can use it
     set_surface(screen_local)
