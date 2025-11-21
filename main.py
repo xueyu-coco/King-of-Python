@@ -84,17 +84,33 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     hp_bar_height = 25
     hp_bar_y = 60
     
-    # 玩家1血条
+    # 玩家1血条（矩形）
     p1_x = 50
-    # 圆角半径：使用高度的一半以获得胶囊形（pill）外观
-    radius = max(2, hp_bar_height // 2)
-    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
-    hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
-    # 使用指定颜色 (104, 143, 255) 显示玩家1 血条与名称（与玩家2互换）
+    # 玩家1 color (used for fill, border and glow)
     p1_color = (104, 143, 255)
+    # draw a soft outer glow using a semi-transparent surface
+    try:
+        glow = 10
+        glow_surf = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
+        # draw several concentric rectangles with decreasing alpha for a soft glow
+        for i in range(glow, 0, -1):
+            a = int(40 * (i / glow))
+            clr = (p1_color[0], p1_color[1], p1_color[2], a)
+            rect = (glow - i, glow - i, hp_bar_width + i * 2, hp_bar_height + i * 2)
+            try:
+                # draw only the outline so glow appears on the edge
+                pygame.draw.rect(glow_surf, clr, rect, 1)
+            except Exception:
+                pass
+        screen.blit(glow_surf, (p1_x - glow, hp_bar_y - glow))
+    except Exception:
+        # fallback: ignore glow if surface operations fail
+        pass
+    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
     if hp1_width > 0:
-        pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height), border_radius=radius)
-    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
+        pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
+    pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name1 = "PLAYER 1"
     p1_text = font_small.render(name1, True, p1_color)
@@ -117,15 +133,31 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 玩家2血条（从右到左填充，扣血时从左边减少，保持右对齐）
     p2_x = WIDTH - 50 - hp_bar_width
-    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
-    hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
-    # 使用指定颜色 (255, 104, 147) 显示玩家2 血条与名称（与玩家1互换）
+    # 玩家2 color (used for fill, border and glow)
     p2_color = (255, 104, 147)
+    # draw glow for player2 (right side)
+    try:
+        glow = 10
+        glow_surf2 = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
+        for i in range(glow, 0, -1):
+            a = int(40 * (i / glow))
+            clr = (p2_color[0], p2_color[1], p2_color[2], a)
+            rect = (glow - i, glow - i, hp_bar_width + i * 2, hp_bar_height + i * 2)
+            try:
+                pygame.draw.rect(glow_surf2, clr, rect, 1)
+            except Exception:
+                pass
+        screen.blit(glow_surf2, (p2_x - glow, hp_bar_y - glow))
+    except Exception:
+        pass
+    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
+    # 使用指定颜色显示玩家2 血条与名称（与玩家1互换）
     # 血条右对齐，扣血时从左边消失
     hp2_start_x = p2_x + (hp_bar_width - hp2_width)
     if hp2_width > 0:
-        pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height), border_radius=radius)
-    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
+        pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
+    pygame.draw.rect(screen, p2_color, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name2 = "PLAYER 2"
     p2_text = font_small.render(name2, True, p2_color)
