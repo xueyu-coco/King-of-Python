@@ -257,6 +257,13 @@ def main():
         # initialize background module sizes and streams (no new display)
         background.init(WIDTH, HEIGHT, create_display=False)
         background.set_surface(screen)
+        # 强制使用项目内的像素字体以确保嵌入时的视觉与独立运行一致
+        try:
+            background.module_font = pygame.font.Font(FONT_PATH, background.font_size)
+            background.module_is_pixel_font = True
+        except Exception:
+            # 如果字体加载失败，忽略并允许模块回退到默认字体
+            pass
     except Exception:
         pass
     
