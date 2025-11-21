@@ -88,11 +88,13 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     p1_x = 50
     pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
-    pygame.draw.rect(screen, player1.color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
+    # 使用指定颜色 (255, 104, 147) 显示玩家1 血条与名称
+    p1_color = (255, 104, 147)
+    pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
     pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name1 = "PLAYER 1"
-    p1_text = font_small.render(name1, True, player1.color)
+    p1_text = font_small.render(name1, True, p1_color)
     if p1_text.get_width() > hp_bar_width:
         small_font = pygame.font.Font(None, 20)
         p1_text = small_font.render(name1, True, player1.color)
@@ -114,13 +116,15 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     p2_x = WIDTH - 50 - hp_bar_width
     pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
+    # 使用指定颜色 (104, 143, 255) 显示玩家2 血条与名称
+    p2_color = (104, 143, 255)
     # 血条右对齐，扣血时从左边消失
     hp2_start_x = p2_x + (hp_bar_width - hp2_width)
-    pygame.draw.rect(screen, player2.color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
+    pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
     pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name2 = "PLAYER 2"
-    p2_text = font_small.render(name2, True, player2.color)
+    p2_text = font_small.render(name2, True, p2_color)
     if p2_text.get_width() > hp_bar_width:
         small_font = pygame.font.Font(None, 20)
         p2_text = small_font.render(name2, True, player2.color)
