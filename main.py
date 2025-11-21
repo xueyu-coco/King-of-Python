@@ -251,6 +251,14 @@ def main():
         except Exception:
             # if settings not available, ignore; errors will surface later
             pass
+    # Initialize and attach the animated background early so the start
+    # screen (run_start) can use it as well.
+    try:
+        # initialize background module sizes and streams (no new display)
+        background.init(WIDTH, HEIGHT, create_display=False)
+        background.set_surface(screen)
+    except Exception:
+        pass
     
     # Use the new Start screen module to show a stylized start menu.
     try:
