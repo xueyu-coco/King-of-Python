@@ -15,7 +15,9 @@ screen = None  # rendering target surface (set by init(create_display=True) or s
 bg_surface = None  # internal transparent surface we draw the streams onto
 
 # Global alpha scale for the streams (0.0 - 1.0). Lower to make streams more transparent.
-ALPHA_SCALE = 0.65  # lower alpha to make purples more transparent (user requested)
+# Slightly reduced so purple code characters are a bit more transparent while keeping
+# brightness and other behavior unchanged.
+ALPHA_SCALE = 0.55  # reduced from 0.65 -> 0.55 to lower purple opacity a bit
 
 # Color definitions: boosted vivid palette — purples are brighter and more saturated
 PALETTE = [
@@ -158,8 +160,22 @@ class CharStream:
                 blit_y = int(char['y'] - (sh - font_size))
 
                 # draw the base character (no outline, no glow)
+                # To make the background characters appear bolder (thicker),
+                # draw the main glyph once at full alpha and then draw a few
+                # slightly-offset copies at reduced alpha to simulate a bold
+                # stroke without changing the font face.
                 base_scaled.set_alpha(base_alpha)
                 screen.blit(base_scaled, (blit_x, blit_y))
+
+                # extra offset blits to thicken the glyph (reduce their alpha)
+                extra_alpha = max(0, min(255, int(base_alpha * 0.55)))
+                base_scaled.set_alpha(extra_alpha)
+                for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+                    try:
+                        screen.blit(base_scaled, (blit_x + ox, blit_y + oy))
+                    except Exception:
+                        # ignore any blit errors (safe fallback)
+                        pass
 
 def create_streams():
     """Create initial digit rain streams"""
