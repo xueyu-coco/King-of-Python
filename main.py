@@ -88,23 +88,26 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     p1_x = 50
     # 玩家1 color (used for fill, border and glow)
     p1_color = (104, 143, 255)
-    # draw a soft outer glow using a semi-transparent surface
+    # draw a colored outer glow around the HP border using layered outlines
     try:
-        glow = 10
+        glow = 12
         glow_surf = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
-        # draw several concentric rectangles with decreasing alpha for a soft glow
-        for i in range(glow, 0, -1):
-            a = int(40 * (i / glow))
+        # draw rings from inner (near border) to outer; alpha decreases outward
+        max_alpha = 120
+        for r in range(0, glow):
+            # r=0 is the inner ring (strongest), larger r are farther out (weaker)
+            a = int(max_alpha * (1 - (r / float(max(1, glow)))))
             clr = (p1_color[0], p1_color[1], p1_color[2], a)
-            rect = (glow - i, glow - i, hp_bar_width + i * 2, hp_bar_height + i * 2)
+            rect = (glow - r, glow - r, hp_bar_width + r * 2, hp_bar_height + r * 2)
             try:
-                # draw only the outline so glow appears on the edge
-                pygame.draw.rect(glow_surf, clr, rect, 1)
+                # inner ring slightly thicker for a crisper edge
+                width = 2 if r == 0 else 1
+                pygame.draw.rect(glow_surf, clr, rect, width)
             except Exception:
                 pass
+        # blit glow behind the HP bar so the border sits on top
         screen.blit(glow_surf, (p1_x - glow, hp_bar_y - glow))
     except Exception:
-        # fallback: ignore glow if surface operations fail
         pass
     pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
@@ -135,16 +138,18 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     p2_x = WIDTH - 50 - hp_bar_width
     # 玩家2 color (used for fill, border and glow)
     p2_color = (255, 104, 147)
-    # draw glow for player2 (right side)
+    # draw a colored outer glow around player2's HP border
     try:
-        glow = 10
+        glow = 12
         glow_surf2 = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
-        for i in range(glow, 0, -1):
-            a = int(40 * (i / glow))
+        max_alpha = 120
+        for r in range(0, glow):
+            a = int(max_alpha * (1 - (r / float(max(1, glow)))))
             clr = (p2_color[0], p2_color[1], p2_color[2], a)
-            rect = (glow - i, glow - i, hp_bar_width + i * 2, hp_bar_height + i * 2)
+            rect = (glow - r, glow - r, hp_bar_width + r * 2, hp_bar_height + r * 2)
             try:
-                pygame.draw.rect(glow_surf2, clr, rect, 1)
+                width = 2 if r == 0 else 1
+                pygame.draw.rect(glow_surf2, clr, rect, width)
             except Exception:
                 pass
         screen.blit(glow_surf2, (p2_x - glow, hp_bar_y - glow))
