@@ -424,7 +424,12 @@ class KeyPlatform:
 
         # 动态平台额外标识（小箭头）
         if self.is_dynamic:
-            arrow = "↕"
+            # Tab 键显示左右箭头，其它动态平台显示上下箭头
+            label_norm = str(self.label).strip().lower()
+            if label_norm == "tab":
+                arrow = "↔"
+            else:
+                arrow = "↕"
             arrow_text = font_tiny.render(arrow, True, P_PRIMARY)
             arrow_rect = arrow_text.get_rect(center=(self.x + self.width//2, self.y - 12))
             screen.blit(arrow_text, arrow_rect)
