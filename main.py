@@ -84,41 +84,18 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     hp_bar_height = 25
     hp_bar_y = 60
     
-    # 玩家1血条（像素化圆角）
+    # 玩家1血条
     p1_x = 50
+    # 圆角半径：使用高度的一半以获得胶囊形（pill）外观
+    radius = max(2, hp_bar_height // 2)
+    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
     # 使用指定颜色 (104, 143, 255) 显示玩家1 血条与名称（与玩家2互换）
     p1_color = (104, 143, 255)
-
-    # 像素化设置：更大的像素块以实现更“像素风”的外观
-    PX = 8
-    sw = max(3, hp_bar_width // PX)
-    sh = max(2, hp_bar_height // PX)
-    small = pygame.Surface((sw, sh), pygame.SRCALPHA)
-
-    # 小画布上圆角半径（控制小尺寸上圆角的像素化程度）
-    small_radius = max(1, sh // 2)
-
-    # 背景（灰色）圆角矩形
-    pygame.draw.rect(small, GRAY, (0, 0, sw, sh), border_radius=small_radius)
-
-    # 血量填充（左对齐）在小画布上
-    hp1_small_w = 0
-    if hp_bar_width > 0:
-        hp1_small_w = max(1, int((hp1_width / hp_bar_width) * sw))
-    if hp1_small_w > 0:
-        pygame.draw.rect(small, p1_color, (0, 0, hp1_small_w, sh))
-
-    # 边框（1px）在小画布上绘制以保持像素化边缘
-    outline = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.rect(outline, BLACK, (0, 0, sw, sh), 1, border_radius=small_radius)
-
-    # 最近邻放大回目标尺寸以获得像素效果
-    scaled = pygame.transform.scale(small, (hp_bar_width, hp_bar_height))
-    scaled_outline = pygame.transform.scale(outline, (hp_bar_width, hp_bar_height))
-    screen.blit(scaled, (p1_x, hp_bar_y))
-    screen.blit(scaled_outline, (p1_x, hp_bar_y))
-
+    if hp1_width > 0:
+        pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height), border_radius=radius)
+    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
+    
     name1 = "PLAYER 1"
     p1_text = font_small.render(name1, True, p1_color)
     if p1_text.get_width() > hp_bar_width:
@@ -140,29 +117,15 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 玩家2血条（从右到左填充，扣血时从左边减少，保持右对齐）
     p2_x = WIDTH - 50 - hp_bar_width
-    # 玩家2血条（像素化圆角，右对齐填充）
+    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
     hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
     # 使用指定颜色 (255, 104, 147) 显示玩家2 血条与名称（与玩家1互换）
     p2_color = (255, 104, 147)
-
-    # 像素化小画布（与玩家1相同尺寸）
-    small2 = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.rect(small2, GRAY, (0, 0, sw, sh), border_radius=small_radius)
-
-    hp2_small_w = 0
-    if hp_bar_width > 0:
-        hp2_small_w = max(1, int((hp2_width / hp_bar_width) * sw))
-    hp2_small_start = max(0, sw - hp2_small_w)
-    if hp2_small_w > 0:
-        pygame.draw.rect(small2, p2_color, (hp2_small_start, 0, hp2_small_w, sh))
-
-    outline2 = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.rect(outline2, BLACK, (0, 0, sw, sh), 1, border_radius=small_radius)
-
-    scaled2 = pygame.transform.scale(small2, (hp_bar_width, hp_bar_height))
-    scaled_outline2 = pygame.transform.scale(outline2, (hp_bar_width, hp_bar_height))
-    screen.blit(scaled2, (p2_x, hp_bar_y))
-    screen.blit(scaled_outline2, (p2_x, hp_bar_y))
+    # 血条右对齐，扣血时从左边消失
+    hp2_start_x = p2_x + (hp_bar_width - hp2_width)
+    if hp2_width > 0:
+        pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height), border_radius=radius)
+    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
     
     name2 = "PLAYER 2"
     p2_text = font_small.render(name2, True, p2_color)
