@@ -86,12 +86,15 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 玩家1血条
     p1_x = 50
-    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    # 圆角半径：使用高度的一半以获得胶囊形（pill）外观
+    radius = max(2, hp_bar_height // 2)
+    pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
     # 使用指定颜色 (104, 143, 255) 显示玩家1 血条与名称（与玩家2互换）
     p1_color = (104, 143, 255)
-    pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
-    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    if hp1_width > 0:
+        pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height), border_radius=radius)
+    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
     
     name1 = "PLAYER 1"
     p1_text = font_small.render(name1, True, p1_color)
@@ -114,14 +117,15 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 玩家2血条（从右到左填充，扣血时从左边减少，保持右对齐）
     p2_x = WIDTH - 50 - hp_bar_width
-    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), border_radius=radius)
     hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
     # 使用指定颜色 (255, 104, 147) 显示玩家2 血条与名称（与玩家1互换）
     p2_color = (255, 104, 147)
     # 血条右对齐，扣血时从左边消失
     hp2_start_x = p2_x + (hp_bar_width - hp2_width)
-    pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
-    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    if hp2_width > 0:
+        pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height), border_radius=radius)
+    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2, border_radius=radius)
     
     name2 = "PLAYER 2"
     p2_text = font_small.render(name2, True, p2_color)
