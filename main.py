@@ -298,11 +298,22 @@ def main():
         except Exception:
             pass
         # 优先从项目 assets 中加载刚刚添加的音效文件
-        attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+        repo_root = os.path.abspath(os.path.dirname(__file__))
+        attack_path = os.path.join(repo_root, 'assets', 'magic_hit_lightning.mp3')
         try:
             attack_sound = pygame.mixer.Sound(attack_path)
-        except Exception:
+            try:
+                attack_sound.set_volume(0.8)
+            except Exception:
+                pass
+            # Debug: print that sound was loaded
+            try:
+                print(f"[SFX] loaded attack_sound: {attack_path}, length={attack_sound.get_length():.3f}s")
+            except Exception:
+                print(f"[SFX] loaded attack_sound: {attack_path}")
+        except Exception as e:
             attack_sound = None
+            print(f"[SFX] failed to load attack_sound: {attack_path} -> {e}")
     except Exception:
         attack_sound = None
     # Initialize and attach the animated background early so the start
@@ -417,15 +428,29 @@ def main():
                 
                 if not game_over:
                     if event.key == player1.controls['attack']:
-                            # 每次按下攻击键都播放音效（无论是否有技能）
-                            try:
-                                if attack_sound:
-                                    attack_sound.play()
-                            except Exception:
-                                pass
-                            skill_used = player1.use_skill()
-                            if skill_used:
-                                last_p1_skill = skill_used
+                        # 每次按下攻击键都播放音效（无论是否有技能）
+                        try:
+                            print("[SFX] attack key pressed: player1")
+                            # lazy load if previous load failed
+                            if not attack_sound:
+                                try:
+                                    attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+                                    attack_sound = pygame.mixer.Sound(attack_path)
+                                    attack_sound.set_volume(0.8)
+                                    print("[SFX] lazy loaded attack_sound for player1")
+                                except Exception as e:
+                                    attack_sound = None
+                                    print(f"[SFX] lazy load failed for player1: {e}")
+                            if attack_sound:
+                                attack_sound.play()
+                                print("[SFX] played attack_sound for player1")
+                            else:
+                                print("[SFX] attack_sound is None")
+                        except Exception as e:
+                            print(f"[SFX] play failed for player1: {e}")
+                        skill_used = player1.use_skill()
+                        if skill_used:
+                            last_p1_skill = skill_used
                             if skill_used == 'print':
                                 proj_x = player1.x + player1.width if player1.facing_right else player1.x
                                 proj_y = player1.y + player1.height // 2
@@ -435,10 +460,24 @@ def main():
                     if event.key == player2.controls['attack']:
                         # 每次按下攻击键都播放音效（无论是否有技能）
                         try:
+                            print("[SFX] attack key pressed: player2")
+                            # lazy load if previous load failed
+                            if not attack_sound:
+                                try:
+                                    attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+                                    attack_sound = pygame.mixer.Sound(attack_path)
+                                    attack_sound.set_volume(0.8)
+                                    print("[SFX] lazy loaded attack_sound for player2")
+                                except Exception as e:
+                                    attack_sound = None
+                                    print(f"[SFX] lazy load failed for player2: {e}")
                             if attack_sound:
                                 attack_sound.play()
-                        except Exception:
-                            pass
+                                print("[SFX] played attack_sound for player2")
+                            else:
+                                print("[SFX] attack_sound is None")
+                        except Exception as e:
+                            print(f"[SFX] play failed for player2: {e}")
                         skill_used = player2.use_skill()
                         if skill_used:
                             last_p2_skill = skill_used
@@ -482,8 +521,11 @@ def main():
                     try:
                         if attack_sound:
                             attack_sound.play()
-                    except Exception:
-                        pass
+                            print("[SFX] played hit sound (player1 -> player2)")
+                        else:
+                            print("[SFX] attack_sound is None when attempting hit play")
+                    except Exception as e:
+                        print(f"[SFX] play failed on hit for player1->player2: {e}")
                     last_p1_skill = None
                 elif last_p1_skill == 'delete' and check_attack_hit(player1, player2):
                     player2.skill = None
