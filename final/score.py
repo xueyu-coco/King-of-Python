@@ -45,6 +45,22 @@ except Exception:
     MONITOR_SURF = None
 
 
+# Preload crown image (pixel crown) for the final animation
+CROWN_SURF = None
+try:
+    base_dir = os.path.dirname(__file__)
+    crown_path = os.path.join(base_dir, 'Crown.png')
+    if os.path.exists(crown_path):
+        _c = pygame.image.load(crown_path)
+        # prefer alpha-preserving surface
+        if _c.get_flags() & pygame.SRCALPHA or _c.get_alpha() is not None:
+            CROWN_SURF = _c.convert_alpha()
+        else:
+            CROWN_SURF = _c.convert()
+except Exception:
+    CROWN_SURF = None
+
+
 def play_score_animation(screen, winner, loser, winner_avatar=None):
     # --- UI装饰函数 ---
     def draw_hearts(surface, x, y, count, spacing=28, size=18, color=(255, 200, 255)):
@@ -111,13 +127,10 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     vt = font_medium.render("VICTORY", True, ORANGE)
     vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery))
     VT_FEET_GAP = 8  # pixels gap between top of victory text and winner's feet
+    WINNER_SCALE = 1.4  # how much larger the winner should appear in the final scene
 
-    crown = None
-    try:
-        crown = pygame.image.load(pygame.compat.get_resource('crown.png'))
-    except Exception:
-        # fallback: draw a simple crown
-        crown = None
+    # prefer the preloaded pixel crown if available; keep legacy fallback
+    crown = CROWN_SURF
 
     # Determine target x for winner to walk to (center of computer)
     target_x = comp_x - winner.width // 2
@@ -213,22 +226,101 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             base_y = vt_rect.top - winner.height - VT_FEET_GAP
             winner.y = base_y + offset
         winner.x = int(winner.x)
-        winner.draw(screen)
+        # draw enlarged winner for the final animation (do not modify Player permanently)
+        try:
+            scale = WINNER_SCALE
+            expanded_w = int(winner.width * scale)
+            expanded_h = int(winner.height * scale)
+            # Align expanded image such that the feet align with original bottom (winner.y + winner.height)
+            draw_x = int(winner.x + winner.width / 2 - expanded_w / 2)
+            draw_y = int(winner.y + winner.height - expanded_h)
 
-        # draw avatar above winner if provided
-        if winner_avatar:
-            aw = winner_avatar.get_width()
-            ah = winner_avatar.get_height()
-            screen.blit(winner_avatar, (int(winner.x + winner.width//2 - aw//2), int(winner.y - ah - 6)))
+            if getattr(winner, 'use_image', False) and getattr(winner, 'current_image', None):
+                img = winner.current_image
+                if not winner.facing_right:
+                    try:
+                        img = pygame.transform.flip(img, True, False)
+                    except Exception:
+                        pass
+                try:
+                    big = pygame.transform.smoothscale(img, (expanded_w, expanded_h))
+                except Exception:
+                    big = pygame.transform.scale(img, (expanded_w, expanded_h))
+                screen.blit(big, (draw_x, draw_y))
+                # draw avatar inside the enlarged sprite if available
+                avatar_surf = None
+                if getattr(winner, 'avatar', None):
+                    avatar_surf = winner.avatar
+                elif getattr(winner, '_cached_avatar', None):
+                    avatar_surf = winner._cached_avatar
+
+                if avatar_surf:
+                    try:
+                        aw, ah = avatar_surf.get_size()
+                        max_aw = int(expanded_w * 0.5)
+                        max_ah = int(expanded_h * 0.5)
+                        scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                        new_w = max(1, int(aw * scale))
+                        new_h = max(1, int(ah * scale))
+                        try:
+                            av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                        except Exception:
+                            av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                        ax = draw_x + (expanded_w - av.get_width()) // 2
+                        ay = draw_y + (expanded_h - av.get_height()) // 2
+                        screen.blit(av, (ax, ay))
+                    except Exception:
+                        pass
+            else:
+                # fallback: draw a larger rect
+                pygame.draw.rect(screen, winner.color, (draw_x, draw_y, expanded_w, expanded_h))
+                # draw avatar inside enlarged rect if available
+                avatar_surf = getattr(winner, 'avatar', None) or getattr(winner, '_cached_avatar', None)
+                if avatar_surf:
+                    try:
+                        aw, ah = avatar_surf.get_size()
+                        max_aw = int(expanded_w * 0.5)
+                        max_ah = int(expanded_h * 0.5)
+                        scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                        new_w = max(1, int(aw * scale))
+                        new_h = max(1, int(ah * scale))
+                        try:
+                            av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                        except Exception:
+                            av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                        ax = draw_x + (expanded_w - av.get_width()) // 2
+                        ay = draw_y + (expanded_h - av.get_height()) // 2
+                        screen.blit(av, (ax, ay))
+                    except Exception:
+                        pass
+        except Exception:
+            # On any error, fall back to the normal draw call
+            try:
+                winner.draw(screen)
+            except Exception:
+                pass
+
+        # no avatar above the winner in the final animation (keep screen clean)
 
         # crown appears after crown_timer has started counting down
         if crown_timer > 0 or (not walking and sit_timer <= 0):
+            # position crown relative to the enlarged winner drawing
             cx = int(winner.x + winner.width//2)
+            # place crown a bit above the winner's head; tweak offset when necessary
             cy = int(winner.y - 22)
             if crown is not None:
-                cw, ch = crown.get_size()
-                crown_s = pygame.transform.smoothscale(crown, (int(winner.width * 1.2), int(ch * (winner.width * 1.2) / cw)))
-                screen.blit(crown_s, (cx - crown_s.get_width()//2, cy - crown_s.get_height()//2))
+                try:
+                    cw, ch = crown.get_size()
+                    # crown should scale roughly with the enlarged winner width
+                    desired_w = int(winner.width * WINNER_SCALE * 0.9)
+                    scale_h = int(ch * (desired_w / cw)) if cw else ch
+                    crown_s = pygame.transform.smoothscale(crown, (max(1, desired_w), max(1, scale_h)))
+                    screen.blit(crown_s, (cx - crown_s.get_width()//2, cy - crown_s.get_height()//2))
+                except Exception:
+                    # fallback to simple polygon if crown blit fails
+                    points = [(cx - 18, cy + 12), (cx - 12, cy - 6), (cx - 4, cy + 8), (cx + 4, cy - 6), (cx + 12, cy + 12)]
+                    pygame.draw.polygon(screen, ORANGE, points)
+                    pygame.draw.polygon(screen, YELLOW, points, 2)
             else:
                 points = [(cx - 18, cy + 12), (cx - 12, cy - 6), (cx - 4, cy + 8), (cx + 4, cy - 6), (cx + 12, cy + 12)]
                 pygame.draw.polygon(screen, ORANGE, points)
