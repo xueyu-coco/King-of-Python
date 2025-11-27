@@ -61,6 +61,52 @@ except Exception:
     CROWN_SURF = None
 
 
+# Preload optional final background image to use inside the decorative frame
+FINAL_BG_SURF = None
+try:
+    base_dir = os.path.dirname(__file__)
+    final_bg_path = os.path.join(base_dir, 'Final_background.png')
+    if os.path.exists(final_bg_path):
+        _bg = pygame.image.load(final_bg_path)
+        # prefer alpha-preserving surface when available
+        if _bg.get_flags() & pygame.SRCALPHA or _bg.get_alpha() is not None:
+            FINAL_BG_SURF = _bg.convert_alpha()
+        else:
+            FINAL_BG_SURF = _bg.convert()
+except Exception:
+    FINAL_BG_SURF = None
+
+
+# Preload an updated full-screen final background (preferred)
+FINAL_BG_UPDATE_SURF = None
+try:
+    base_dir = os.path.dirname(__file__)
+    final_bg_update_path = os.path.join(base_dir, 'Final_background_update.png')
+    if os.path.exists(final_bg_update_path):
+        _bg2 = pygame.image.load(final_bg_update_path)
+        if _bg2.get_flags() & pygame.SRCALPHA or _bg2.get_alpha() is not None:
+            FINAL_BG_UPDATE_SURF = _bg2.convert_alpha()
+        else:
+            FINAL_BG_UPDATE_SURF = _bg2.convert()
+except Exception:
+    FINAL_BG_UPDATE_SURF = None
+
+# Pre-scale the updated final background to cover the screen (cover semantics)
+FINAL_BG_UPDATE_SCALED = None
+try:
+    if FINAL_BG_UPDATE_SURF is not None:
+        bw, bh = FINAL_BG_UPDATE_SURF.get_size()
+        scale = max(WIDTH / bw, HEIGHT / bh)
+        new_w = max(1, int(bw * scale))
+        new_h = max(1, int(bh * scale))
+        try:
+            FINAL_BG_UPDATE_SCALED = pygame.transform.smoothscale(FINAL_BG_UPDATE_SURF, (new_w, new_h))
+        except Exception:
+            FINAL_BG_UPDATE_SCALED = pygame.transform.scale(FINAL_BG_UPDATE_SURF, (new_w, new_h))
+except Exception:
+    FINAL_BG_UPDATE_SCALED = None
+
+
 def play_score_animation(screen, winner, loser, winner_avatar=None):
     # --- UI装饰函数 ---
     def draw_hearts(surface, x, y, count, spacing=28, size=18, color=(255, 200, 255)):
@@ -75,31 +121,51 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             pygame.draw.polygon(surface, color, points)
 
     def draw_score_ui(surface):
-        # 紫色外框和黑色内框
+        # If a pre-scaled full-screen updated background is provided, use it and skip the purple frame.
+        if FINAL_BG_UPDATE_SCALED is not None:
+            try:
+                bw, bh = FINAL_BG_UPDATE_SCALED.get_size()
+                bx = (WIDTH - bw) // 2
+                by = (HEIGHT - bh) // 2
+                # draw the pre-scaled background (covers whole screen)
+                surface.blit(FINAL_BG_UPDATE_SCALED, (bx, by))
+            except Exception:
+                # fallback to the purple frame if blit fails
+                surface.fill((180, 120, 220))
+                inner_rect = pygame.Rect(40, 40, WIDTH - 80, HEIGHT - 120)
+                pygame.draw.rect(surface, BLACK, inner_rect)
+            return
+
+        # 紫色外框和黑色内框 (fallback behavior)
         surface.fill((180, 120, 220))
         inner_rect = pygame.Rect(40, 40, WIDTH - 80, HEIGHT - 120)
-        pygame.draw.rect(surface, BLACK, inner_rect)
+        # If a final background image is provided, draw it into the inner rect.
+        # Keep aspect ratio and center it. Otherwise fallback to a flat black background.
+        if FINAL_BG_SURF is not None:
+            try:
+                bw, bh = FINAL_BG_SURF.get_size()
+                # compute scale to fit inner rect while preserving aspect
+                scale = min((inner_rect.width) / bw, (inner_rect.height) / bh)
+                new_w = max(1, int(bw * scale))
+                new_h = max(1, int(bh * scale))
+                try:
+                    bg_s = pygame.transform.smoothscale(FINAL_BG_SURF, (new_w, new_h))
+                except Exception:
+                    bg_s = pygame.transform.scale(FINAL_BG_SURF, (new_w, new_h))
+                bx = inner_rect.left + (inner_rect.width - new_w) // 2
+                by = inner_rect.top + (inner_rect.height - new_h) // 2
+                # draw a subtle black fill behind the image for safety
+                pygame.draw.rect(surface, BLACK, inner_rect)
+                surface.blit(bg_s, (bx, by))
+            except Exception:
+                pygame.draw.rect(surface, BLACK, inner_rect)
+        else:
+            pygame.draw.rect(surface, BLACK, inner_rect)
         # 顶部 hearts
         draw_hearts(surface, inner_rect.left + 80, inner_rect.top + 20, 10, spacing=40, size=20, color=(240, 200, 255))
-        # 三个emoji圆形
-        center_x = inner_rect.centerx
-        yy = inner_rect.top + 120
-        for i, col in enumerate([(255, 230, 120), (255, 120, 120), (255, 230, 120)]):
-            cx = center_x + (i - 1) * 120
-            pygame.draw.circle(surface, col, (cx, yy), 40)
-            pygame.draw.circle(surface, (160, 80, 200), (cx, yy), 44, 4)
-            # 底部左侧小圆和pac-man
-            bottom_y = inner_rect.bottom - 30
-            pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, bottom_y), 18)
-            pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, bottom_y - 10), (inner_rect.left + 100, bottom_y - 10), (inner_rect.left + 90, bottom_y + 10)])
-            # 底部右侧 title - 改为项目名称
-            be = font_medium.render('King of Python', True, (160, 255, 220))
-            circle_top = bottom_y - 18  # 圆形顶部 = 圆心y - 半径
-            be_y = circle_top
-            surface.blit(be, (inner_rect.right - be.get_width() - 20, be_y))
-            # 底部说明文字（上移一些避免与标题重叠）
-            sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
-            surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
+        # 底部说明文字（上移一些避免与标题重叠）
+        sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
+        surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
     """Play a short ending animation: winner walks to a computer, sits, and wears a crown.
 
     Args:
@@ -197,7 +263,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
     # Place loser beside the monitor image (prefer right side if there's space)
     # default spacing from monitor edge (smaller so avatar sits closer)
-    side_spacing = 12
+    side_spacing = 8  # reduced spacing to bring loser closer horizontally
     # preferred to the right of the monitor
     right_x = monitor_rect.right + side_spacing
     left_x = monitor_rect.left - side_spacing - loser.width
@@ -206,8 +272,9 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         loser_target_x = right_x
     else:
         loser_target_x = max(8, left_x)
-    loser.x = int(loser_target_x)
-    loser.y = monitor_rect.bottom - loser.height + 20
+    # nudge loser slightly up and left to sit visually closer to the monitor
+    loser.x = int(loser_target_x) - 8
+    loser.y = monitor_rect.bottom - loser.height + 10
 
     # Use a module-preloaded monitor surface for instant start
     monitor_s = MONITOR_SURF
@@ -267,15 +334,16 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     # (chair is drawn with the fallback monitor only)
 
         # draw loser beside the computer (prefer right side when space allows)
-        side_spacing = 12
+        side_spacing = 8
         right_x = monitor_rect.right + side_spacing
         left_x = monitor_rect.left - side_spacing - loser.width
         if right_x + loser.width + 16 < WIDTH:
             loser_target_x = right_x
         else:
             loser_target_x = max(8, left_x)
-        loser.x = int(loser_target_x)
-        loser.y = monitor_rect.bottom - loser.height + 20
+        # apply the same visual nudge as initial placement (left and up)
+        loser.x = int(loser_target_x) - 8
+        loser.y = monitor_rect.bottom - loser.height + 10
         # Prevent duplicate avatars: temporarily hide loser's avatar while drawing base sprite
         try:
             _saved_avatar = getattr(loser, 'avatar', None)
