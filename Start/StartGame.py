@@ -81,7 +81,7 @@ def run_start(screen, clock):
                 screen.blit(bg_image, (0, 0))
 
             # 可选：在底部显示提示文字
-            sub = prompt_font.render('press space to start', True, (180, 180, 180))
+            sub = prompt_font.render('Press Space to Start', True, (230, 230, 230))
             left_offset = 40  # shift text slightly left of center for better balance
             screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2 - left_offset, HEIGHT - 190))
 
