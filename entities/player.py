@@ -247,7 +247,8 @@ class Player:
                 pass
             # 构造 assets 路径并尝试加载播放短音效
             repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-            ice_path = os.path.join(repo_root, 'assets', 'eufrosyyn_sfx_break_ice_a.mp3')
+            # 使用新上传的 WAV 作为冰冻音效
+            ice_path = os.path.join(repo_root, 'assets', '436972_creeeeak_ice_sounds5.wav')
             try:
                 ice_sound = pygame.mixer.Sound(ice_path)
                 try:
