@@ -478,6 +478,12 @@ def main():
                 if last_p1_skill == 'pow' and check_attack_hit(player1, player2):
                     knockback_dir = 1 if player1.facing_right else -1
                     player2.take_damage(8, knockback_dir)
+                    # 命中时播放音效
+                    try:
+                        if attack_sound:
+                            attack_sound.play()
+                    except Exception:
+                        pass
                     last_p1_skill = None
                 elif last_p1_skill == 'delete' and check_attack_hit(player1, player2):
                     player2.skill = None
@@ -487,6 +493,12 @@ def main():
                 if last_p2_skill == 'pow' and check_attack_hit(player2, player1):
                     knockback_dir = 1 if player2.facing_right else -1
                     player1.take_damage(8, knockback_dir)
+                    # 命中时播放音效
+                    try:
+                        if attack_sound:
+                            attack_sound.play()
+                    except Exception:
+                        pass
                     last_p2_skill = None
                 elif last_p2_skill == 'delete' and check_attack_hit(player2, player1):
                     player1.skill = None
