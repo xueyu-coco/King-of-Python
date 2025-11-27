@@ -15,7 +15,9 @@ screen = None  # rendering target surface (set by init(create_display=True) or s
 bg_surface = None  # internal transparent surface we draw the streams onto
 
 # Global alpha scale for the streams (0.0 - 1.0). Lower to make streams more transparent.
-ALPHA_SCALE = 0.65  # lower alpha to make purples more transparent (user requested)
+# Slightly reduced so purple code characters are a bit more transparent while keeping
+# brightness and other behavior unchanged.
+ALPHA_SCALE = 0.55  # reduced from 0.65 -> 0.55 to lower purple opacity a bit
 
 # Color definitions: boosted vivid palette — purples are brighter and more saturated
 PALETTE = [
@@ -133,7 +135,13 @@ class CharStream:
             # 绘制字符（使用 alpha 调低亮度）
             if 0 <= char['y'] <= ch:
                 # render base text surface
-                text_surf = font.render(char['value'], True, color).convert_alpha()
+                # For pixel fonts, disable antialiasing to keep a crisp/blocky look;
+                # for non-pixel fonts prefer antialiasing for smoother glyphs.
+                try:
+                    antialias = False if module_is_pixel_font else True
+                except Exception:
+                    antialias = True
+                text_surf = font.render(char['value'], antialias, color).convert_alpha()
                 # apply alpha and scale
                 scale = char.get('scale', 1.0)
                 sw = max(1, int(text_surf.get_width() * scale))
@@ -158,8 +166,22 @@ class CharStream:
                 blit_y = int(char['y'] - (sh - font_size))
 
                 # draw the base character (no outline, no glow)
+                # To make the background characters appear bolder (thicker),
+                # draw the main glyph once at full alpha and then draw a few
+                # slightly-offset copies at reduced alpha to simulate a bold
+                # stroke without changing the font face.
                 base_scaled.set_alpha(base_alpha)
                 screen.blit(base_scaled, (blit_x, blit_y))
+
+                # extra offset blits to thicken the glyph (reduce their alpha)
+                extra_alpha = max(0, min(255, int(base_alpha * 0.55)))
+                base_scaled.set_alpha(extra_alpha)
+                for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+                    try:
+                        screen.blit(base_scaled, (blit_x + ox, blit_y + oy))
+                    except Exception:
+                        # ignore any blit errors (safe fallback)
+                        pass
 
 def create_streams():
     """Create initial digit rain streams"""
@@ -247,14 +269,43 @@ def set_surface(surface):
 
 def main():
     global char_streams
-
     # Standalone runner: initializes pygame and creates a display
+    global module_font, module_is_pixel_font
     pygame.init()
     screen_local = pygame.display.set_mode((cw, ch), pygame.RESIZABLE)
     pygame.display.set_caption("Matrix Digital Rain")
 
     # create font
-    font = pygame.font.SysFont('couriernew', font_size, bold=True)
+    # Prefer the project's bundled pixel font for the standalone runner as
+    # well so that standalone visuals match the embedded background when
+    # the pixel font is available. Fall back to courier if not found.
+    font = None
+    try:
+        fonts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fonts'))
+        candidates = glob.glob(os.path.join(fonts_dir, 'ark-pixel-12px-proportional-*.otf'))
+        chosen = None
+        if candidates:
+            for p in candidates:
+                if 'latin' in os.path.basename(p).lower():
+                    chosen = p
+                    break
+            if chosen is None:
+                chosen = candidates[0]
+            font = pygame.font.Font(chosen, font_size)
+            module_font = font
+            module_is_pixel_font = True
+    except Exception:
+        font = None
+
+    if font is None:
+        try:
+            font = pygame.font.SysFont('couriernew', font_size, bold=True)
+            module_font = font
+            module_is_pixel_font = False
+        except Exception:
+            font = pygame.font.Font(None, font_size)
+            module_font = font
+            module_is_pixel_font = False
 
     # set our surface so draw() can use it
     set_surface(screen_local)

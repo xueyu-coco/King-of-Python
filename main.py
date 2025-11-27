@@ -11,7 +11,10 @@ from entities.bubble import Bubble
 from entities.projectile import Projectile
 from entities.platform import KeyPlatform
 from final.score import play_score_animation
-from Backround import backround_1 as background
+try:
+    from Backround import backround_2 as background
+except Exception:
+    from Backround import backround_1 as background
 from Start.StartGame import run_start
 
 try:
@@ -84,15 +87,39 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     hp_bar_height = 25
     hp_bar_y = 60
     
-    # 玩家1血条
+    # 玩家1血条（矩形）
     p1_x = 50
+    # 玩家1 color (used for fill, border and glow)
+    p1_color = (104, 143, 255)
+    # draw a colored outer glow around the HP border using layered outlines
+    try:
+        glow = 12
+        glow_surf = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
+        # draw rings from inner (near border) to outer; alpha decreases outward
+        max_alpha = 120
+        for r in range(0, glow):
+            # r=0 is the inner ring (strongest), larger r are farther out (weaker)
+            a = int(max_alpha * (1 - (r / float(max(1, glow)))))
+            clr = (p1_color[0], p1_color[1], p1_color[2], a)
+            rect = (glow - r, glow - r, hp_bar_width + r * 2, hp_bar_height + r * 2)
+            try:
+                # inner ring slightly thicker for a crisper edge
+                width = 2 if r == 0 else 1
+                pygame.draw.rect(glow_surf, clr, rect, width)
+            except Exception:
+                pass
+        # blit glow behind the HP bar so the border sits on top
+        screen.blit(glow_surf, (p1_x - glow, hp_bar_y - glow))
+    except Exception:
+        pass
     pygame.draw.rect(screen, GRAY, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp1_width = int((player1.hp / player1.max_hp) * hp_bar_width)
-    pygame.draw.rect(screen, player1.color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
-    pygame.draw.rect(screen, BLACK, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    if hp1_width > 0:
+        pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp1_width, hp_bar_height))
+    pygame.draw.rect(screen, p1_color, (p1_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name1 = "PLAYER 1"
-    p1_text = font_small.render(name1, True, player1.color)
+    p1_text = font_small.render(name1, True, p1_color)
     if p1_text.get_width() > hp_bar_width:
         small_font = pygame.font.Font(None, 20)
         p1_text = small_font.render(name1, True, player1.color)
@@ -112,15 +139,36 @@ def draw_ui(screen, player1, player2, p1_avatar=None, p2_avatar=None):
     
     # 玩家2血条（从右到左填充，扣血时从左边减少，保持右对齐）
     p2_x = WIDTH - 50 - hp_bar_width
+    # 玩家2 color (used for fill, border and glow)
+    p2_color = (255, 104, 147)
+    # draw a colored outer glow around player2's HP border
+    try:
+        glow = 12
+        glow_surf2 = pygame.Surface((hp_bar_width + glow * 2, hp_bar_height + glow * 2), pygame.SRCALPHA)
+        max_alpha = 120
+        for r in range(0, glow):
+            a = int(max_alpha * (1 - (r / float(max(1, glow)))))
+            clr = (p2_color[0], p2_color[1], p2_color[2], a)
+            rect = (glow - r, glow - r, hp_bar_width + r * 2, hp_bar_height + r * 2)
+            try:
+                width = 2 if r == 0 else 1
+                pygame.draw.rect(glow_surf2, clr, rect, width)
+            except Exception:
+                pass
+        screen.blit(glow_surf2, (p2_x - glow, hp_bar_y - glow))
+    except Exception:
+        pass
     pygame.draw.rect(screen, GRAY, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height))
     hp2_width = int((player2.hp / player2.max_hp) * hp_bar_width)
+    # 使用指定颜色显示玩家2 血条与名称（与玩家1互换）
     # 血条右对齐，扣血时从左边消失
     hp2_start_x = p2_x + (hp_bar_width - hp2_width)
-    pygame.draw.rect(screen, player2.color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
-    pygame.draw.rect(screen, BLACK, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
+    if hp2_width > 0:
+        pygame.draw.rect(screen, p2_color, (hp2_start_x, hp_bar_y, hp2_width, hp_bar_height))
+    pygame.draw.rect(screen, p2_color, (p2_x, hp_bar_y, hp_bar_width, hp_bar_height), 2)
     
     name2 = "PLAYER 2"
-    p2_text = font_small.render(name2, True, player2.color)
+    p2_text = font_small.render(name2, True, p2_color)
     if p2_text.get_width() > hp_bar_width:
         small_font = pygame.font.Font(None, 20)
         p2_text = small_font.render(name2, True, player2.color)
@@ -243,6 +291,49 @@ def main():
         except Exception:
             # if settings not available, ignore; errors will surface later
             pass
+    # 尝试初始化混音器并加载攻击音效（如果可用）
+    attack_sound = None
+    try:
+        # 确保 mixer 已初始化
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+        except Exception:
+            pass
+        # 优先从项目 assets 中加载刚刚添加的音效文件
+        repo_root = os.path.abspath(os.path.dirname(__file__))
+        attack_path = os.path.join(repo_root, 'assets', 'magic_hit_lightning.mp3')
+        try:
+            attack_sound = pygame.mixer.Sound(attack_path)
+            try:
+                attack_sound.set_volume(0.8)
+            except Exception:
+                pass
+            # Debug: print that sound was loaded
+            try:
+                print(f"[SFX] loaded attack_sound: {attack_path}, length={attack_sound.get_length():.3f}s")
+            except Exception:
+                print(f"[SFX] loaded attack_sound: {attack_path}")
+        except Exception as e:
+            attack_sound = None
+            print(f"[SFX] failed to load attack_sound: {attack_path} -> {e}")
+    except Exception:
+        attack_sound = None
+    # Initialize and attach the animated background early so the start
+    # screen (run_start) can use it as well.
+    try:
+        # initialize background module sizes and streams (no new display)
+        background.init(WIDTH, HEIGHT, create_display=False)
+        background.set_surface(screen)
+        # 强制使用项目内的像素字体以确保嵌入时的视觉与独立运行一致
+        try:
+            background.module_font = pygame.font.Font(FONT_PATH, background.font_size)
+            background.module_is_pixel_font = True
+        except Exception:
+            # 如果字体加载失败，忽略并允许模块回退到默认字体
+            pass
+    except Exception:
+        pass
     
     # Use the new Start screen module to show a stylized start menu.
     try:
@@ -340,6 +431,26 @@ def main():
                 
                 if not game_over:
                     if event.key == player1.controls['attack']:
+                        # 每次按下攻击键都播放音效（无论是否有技能）
+                        try:
+                            print("[SFX] attack key pressed: player1")
+                            # lazy load if previous load failed
+                            if not attack_sound:
+                                try:
+                                    attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+                                    attack_sound = pygame.mixer.Sound(attack_path)
+                                    attack_sound.set_volume(0.8)
+                                    print("[SFX] lazy loaded attack_sound for player1")
+                                except Exception as e:
+                                    attack_sound = None
+                                    print(f"[SFX] lazy load failed for player1: {e}")
+                            if attack_sound:
+                                attack_sound.play()
+                                print("[SFX] played attack_sound for player1")
+                            else:
+                                print("[SFX] attack_sound is None")
+                        except Exception as e:
+                            print(f"[SFX] play failed for player1: {e}")
                         skill_used = player1.use_skill()
                         if skill_used:
                             last_p1_skill = skill_used
@@ -350,6 +461,26 @@ def main():
                                 projectiles.append(Projectile(proj_x, proj_y, direction, player1))
                     
                     if event.key == player2.controls['attack']:
+                        # 每次按下攻击键都播放音效（无论是否有技能）
+                        try:
+                            print("[SFX] attack key pressed: player2")
+                            # lazy load if previous load failed
+                            if not attack_sound:
+                                try:
+                                    attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+                                    attack_sound = pygame.mixer.Sound(attack_path)
+                                    attack_sound.set_volume(0.8)
+                                    print("[SFX] lazy loaded attack_sound for player2")
+                                except Exception as e:
+                                    attack_sound = None
+                                    print(f"[SFX] lazy load failed for player2: {e}")
+                            if attack_sound:
+                                attack_sound.play()
+                                print("[SFX] played attack_sound for player2")
+                            else:
+                                print("[SFX] attack_sound is None")
+                        except Exception as e:
+                            print(f"[SFX] play failed for player2: {e}")
                         skill_used = player2.use_skill()
                         if skill_used:
                             last_p2_skill = skill_used
@@ -389,6 +520,15 @@ def main():
                 if last_p1_skill == 'pow' and check_attack_hit(player1, player2):
                     knockback_dir = 1 if player1.facing_right else -1
                     player2.take_damage(8, knockback_dir)
+                    # 命中时播放音效
+                    try:
+                        if attack_sound:
+                            attack_sound.play()
+                            print("[SFX] played hit sound (player1 -> player2)")
+                        else:
+                            print("[SFX] attack_sound is None when attempting hit play")
+                    except Exception as e:
+                        print(f"[SFX] play failed on hit for player1->player2: {e}")
                     last_p1_skill = None
                 elif last_p1_skill == 'delete' and check_attack_hit(player1, player2):
                     player2.skill = None
@@ -398,6 +538,12 @@ def main():
                 if last_p2_skill == 'pow' and check_attack_hit(player2, player1):
                     knockback_dir = 1 if player2.facing_right else -1
                     player1.take_damage(8, knockback_dir)
+                    # 命中时播放音效
+                    try:
+                        if attack_sound:
+                            attack_sound.play()
+                    except Exception:
+                        pass
                     last_p2_skill = None
                 elif last_p2_skill == 'delete' and check_attack_hit(player2, player1):
                     player1.skill = None

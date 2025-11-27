@@ -237,6 +237,30 @@ class Player:
         self.is_frozen = True
         self.freeze_timer = FREEZE_DURATION
         self.vel_x = 0
+        # 播放冰冻音效（容错处理）
+        try:
+            # 初始化 mixer（如果尚未初始化）
+            try:
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+            except Exception:
+                pass
+            # 构造 assets 路径并尝试加载播放短音效
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            # 使用新上传的 WAV 作为冰冻音效
+            ice_path = os.path.join(repo_root, 'assets', '436972_creeeeak_ice_sounds5.wav')
+            try:
+                ice_sound = pygame.mixer.Sound(ice_path)
+                try:
+                    ice_sound.set_volume(0.8)
+                except Exception:
+                    pass
+                ice_sound.play()
+            except Exception:
+                # 如果加载或播放失败，不要抛出异常影响游戏
+                pass
+        except Exception:
+            pass
     
     def reverse_controls(self):
         """反转玩家控制"""
