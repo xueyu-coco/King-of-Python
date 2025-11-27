@@ -288,6 +288,23 @@ def main():
         except Exception:
             # if settings not available, ignore; errors will surface later
             pass
+    # 尝试初始化混音器并加载攻击音效（如果可用）
+    attack_sound = None
+    try:
+        # 确保 mixer 已初始化
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+        except Exception:
+            pass
+        # 优先从项目 assets 中加载刚刚添加的音效文件
+        attack_path = os.path.join(HERE, 'assets', 'magic_hit_lightning.mp3')
+        try:
+            attack_sound = pygame.mixer.Sound(attack_path)
+        except Exception:
+            attack_sound = None
+    except Exception:
+        attack_sound = None
     # Initialize and attach the animated background early so the start
     # screen (run_start) can use it as well.
     try:
@@ -403,6 +420,12 @@ def main():
                         skill_used = player1.use_skill()
                         if skill_used:
                             last_p1_skill = skill_used
+                            # 播放攻击音效（如果已加载）
+                            try:
+                                if attack_sound:
+                                    attack_sound.play()
+                            except Exception:
+                                pass
                             if skill_used == 'print':
                                 proj_x = player1.x + player1.width if player1.facing_right else player1.x
                                 proj_y = player1.y + player1.height // 2
@@ -413,6 +436,12 @@ def main():
                         skill_used = player2.use_skill()
                         if skill_used:
                             last_p2_skill = skill_used
+                            # 播放攻击音效（如果已加载）
+                            try:
+                                if attack_sound:
+                                    attack_sound.play()
+                            except Exception:
+                                pass
                             if skill_used == 'print':
                                 proj_x = player2.x + player2.width if player2.facing_right else player2.x
                                 proj_y = player2.y + player2.height // 2
