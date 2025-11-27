@@ -136,8 +136,9 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     target_x = comp_x - winner.width // 2
     walking = True
     sit_timer = 0
-    crown_timer = 0
-    crown_allowed = False
+    # show crown from the start of the animation
+    crown_timer = FPS * 6
+    crown_allowed = True
     # Prepare jump animation params
     jump_phase = 0.0
     jump_speed = 0.18
@@ -194,9 +195,18 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         _saved_winner_state = {}
         _saved_loser_state = {}
 
-    # Place loser initially to the left of the monitor (will be updated each frame)
-    loser_target_x = monitor_rect.left - 120
-    loser.x = loser_target_x
+    # Place loser beside the monitor image (prefer right side if there's space)
+    # default spacing from monitor edge (smaller so avatar sits closer)
+    side_spacing = 12
+    # preferred to the right of the monitor
+    right_x = monitor_rect.right + side_spacing
+    left_x = monitor_rect.left - side_spacing - loser.width
+    # choose the side that fits within the screen; prefer right if room
+    if right_x + loser.width + 16 < WIDTH:
+        loser_target_x = right_x
+    else:
+        loser_target_x = max(8, left_x)
+    loser.x = int(loser_target_x)
     loser.y = monitor_rect.bottom - loser.height + 20
 
     # Use a module-preloaded monitor surface for instant start
@@ -256,11 +266,62 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
     # (chair is drawn with the fallback monitor only)
 
-        # draw loser near the computer (to the left)
-        loser_target_x = monitor_rect.left - 120
-        loser.x = loser_target_x
+        # draw loser beside the computer (prefer right side when space allows)
+        side_spacing = 12
+        right_x = monitor_rect.right + side_spacing
+        left_x = monitor_rect.left - side_spacing - loser.width
+        if right_x + loser.width + 16 < WIDTH:
+            loser_target_x = right_x
+        else:
+            loser_target_x = max(8, left_x)
+        loser.x = int(loser_target_x)
         loser.y = monitor_rect.bottom - loser.height + 20
-        loser.draw(screen)
+        # Prevent duplicate avatars: temporarily hide loser's avatar while drawing base sprite
+        try:
+            _saved_avatar = getattr(loser, 'avatar', None)
+            _saved_cached = getattr(loser, '_cached_avatar', None)
+            try:
+                loser.avatar = None
+            except Exception:
+                pass
+            try:
+                loser._cached_avatar = None
+            except Exception:
+                pass
+
+            # draw the loser's body (without avatar)
+            loser.draw(screen)
+
+            # draw a single avatar manually (shifted left to sit closer to monitor)
+            avatar_surf = _saved_avatar or _saved_cached
+            if avatar_surf:
+                try:
+                    aw, ah = avatar_surf.get_size()
+                    max_aw = int(loser.width * 0.5)
+                    max_ah = int(loser.height * 0.5)
+                    scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                    new_w = max(1, int(aw * scale))
+                    new_h = max(1, int(ah * scale))
+                    try:
+                        av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                    except Exception:
+                        av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                    # Center avatar within the loser's frame (same logic as winner)
+                    ax = int(loser.x + (loser.width - av.get_width()) / 2)
+                    ay = int(loser.y + (loser.height - av.get_height()) / 2)
+                    screen.blit(av, (ax, ay))
+                except Exception:
+                    pass
+        finally:
+            # restore avatar fields
+            try:
+                loser.avatar = _saved_avatar
+            except Exception:
+                pass
+            try:
+                loser._cached_avatar = _saved_cached
+            except Exception:
+                pass
 
         # draw winner (on top of monitor, jumping)
         if not walking:
