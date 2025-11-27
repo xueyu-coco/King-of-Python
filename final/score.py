@@ -152,6 +152,48 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     loser.vel_x = 0
     loser.vel_y = 0
 
+    # Save gameplay-related state and clear effects so final animation isn't affected
+    _saved_winner_state = {}
+    _saved_loser_state = {}
+    try:
+        for p, storage in ((winner, _saved_winner_state), (loser, _saved_loser_state)):
+            storage['is_super'] = getattr(p, 'is_super', False)
+            storage['super_timer'] = getattr(p, 'super_timer', 0)
+            storage['super_collision_cooldown'] = getattr(p, 'super_collision_cooldown', 0)
+            storage['is_frozen'] = getattr(p, 'is_frozen', False)
+            storage['freeze_timer'] = getattr(p, 'freeze_timer', 0)
+            storage['is_reversed'] = getattr(p, 'is_reversed', False)
+            storage['reverse_timer'] = getattr(p, 'reverse_timer', 0)
+            storage['skill'] = getattr(p, 'skill', None)
+            storage['is_attacking'] = getattr(p, 'is_attacking', False)
+            storage['attack_frame'] = getattr(p, 'attack_frame', 0)
+            storage['attack_cooldown'] = getattr(p, 'attack_cooldown', 0)
+            storage['knockback_x'] = getattr(p, 'knockback_x', 0)
+            storage['vel_x'] = getattr(p, 'vel_x', 0)
+            storage['vel_y'] = getattr(p, 'vel_y', 0)
+            storage['on_ground'] = getattr(p, 'on_ground', False)
+
+            # clear active effects
+            p.is_super = False
+            p.super_timer = 0
+            p.super_collision_cooldown = 0
+            p.is_frozen = False
+            p.freeze_timer = 0
+            p.is_reversed = False
+            p.reverse_timer = 0
+            p.skill = None
+            p.is_attacking = False
+            p.attack_frame = 0
+            p.attack_cooldown = 0
+            p.knockback_x = 0
+            p.vel_x = 0
+            p.vel_y = 0
+            p.on_ground = True
+    except Exception:
+        # if anything goes wrong, fall back to not crashing the animation
+        _saved_winner_state = {}
+        _saved_loser_state = {}
+
     # Place loser initially to the left of the monitor (will be updated each frame)
     loser_target_x = monitor_rect.left - 120
     loser.x = loser_target_x
@@ -358,3 +400,30 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             break
 
     # no blocking waits here — return immediately for a smooth transition back to game
+
+    # Restore saved gameplay state so players resume normal behavior after the animation
+    try:
+        for p, storage in ((winner, _saved_winner_state), (loser, _saved_loser_state)):
+            if not storage:
+                continue
+            try:
+                p.is_super = storage.get('is_super', False)
+                p.super_timer = storage.get('super_timer', 0)
+                p.super_collision_cooldown = storage.get('super_collision_cooldown', 0)
+                p.is_frozen = storage.get('is_frozen', False)
+                p.freeze_timer = storage.get('freeze_timer', 0)
+                p.is_reversed = storage.get('is_reversed', False)
+                p.reverse_timer = storage.get('reverse_timer', 0)
+                p.skill = storage.get('skill', None)
+                p.is_attacking = storage.get('is_attacking', False)
+                p.attack_frame = storage.get('attack_frame', 0)
+                p.attack_cooldown = storage.get('attack_cooldown', 0)
+                p.knockback_x = storage.get('knockback_x', 0)
+                p.vel_x = storage.get('vel_x', 0)
+                p.vel_y = storage.get('vel_y', 0)
+                p.on_ground = storage.get('on_ground', False)
+            except Exception:
+                # ignore restore errors
+                pass
+    except Exception:
+        pass
