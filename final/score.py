@@ -181,7 +181,8 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             winner.y += (chair_y - winner.y) * 0.2
             sit_timer -= 1
             if sit_timer <= 0:
-                crown_timer = FPS * 2  # 2 seconds until crown appears
+                # start crown timer immediately and allow crown to appear as soon as jump starts
+                crown_timer = FPS * 2  # 2 seconds as safety, but we'll also show crown when jumping begins
 
         elif crown_timer > 0:
             crown_timer -= 1
@@ -301,12 +302,10 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
                 pass
 
         # no avatar above the winner in the final animation (keep screen clean)
-
-        # crown appears after crown_timer has started counting down
-        if crown_timer > 0 or (not walking and sit_timer <= 0):
+        # show crown when timer active OR when the winner has started the jump animation
+        if crown_timer > 0 or (not walking and sit_timer <= 0 and jump_phase > 0) or (jump_phase > 0 and not walking):
             # position crown relative to the enlarged winner drawing
             cx = int(winner.x + winner.width//2)
-            # place crown a bit above the winner's head; tweak offset when necessary
             cy = int(winner.y - 22)
             if crown is not None:
                 try:
