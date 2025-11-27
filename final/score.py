@@ -142,7 +142,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
                 # small offset to nudge the image slightly right
                 FINAL_BG_OFFSET_X = 20
                 FINAL_BG_OFFSET_Y = 12
-                bx = (WIDTH - bw) // 2 + FINAL_BG_OFFSET_X
+                bx = (WIDTH - bw) // 2 + FINAL_BG_OFFSET_X + (globals().get('SCENE_SHIFT_X') if 'SCENE_SHIFT_X' in globals() else 0)
                 by = (HEIGHT - bh) // 2 + FINAL_BG_OFFSET_Y
                 # Clamp vertical position so the image never extends off-screen
                 if by < 0:
@@ -207,10 +207,13 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
     # Setup simple scene positions (computer centered on screen)
     # enlarge the monitor so the pixel-art image is more prominent
+    SCENE_SHIFT_X = -40
+    # Nudge the losing player's position (and its avatar) further left so it sits closer to the monitor
+    LOSER_NUDGE = -48
     comp_w = 520
     comp_h = 360
-    # center monitor in the middle of the screen
-    comp_x = WIDTH // 2
+    # center monitor in the middle of the screen (apply scene shift)
+    comp_x = WIDTH // 2 + SCENE_SHIFT_X
     comp_y = HEIGHT // 2 + 80  # slightly lower than exact center so characters sit comfortably
     monitor_rect = pygame.Rect(comp_x - comp_w // 2, comp_y - comp_h // 2 - 20, comp_w, comp_h)
     chair_x = comp_x - 40
@@ -300,7 +303,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     else:
         loser_target_x = max(8, left_x)
     # nudge loser slightly up and left to sit visually closer to the monitor
-    loser.x = int(loser_target_x) - 8
+    loser.x = int(loser_target_x) - 8 + LOSER_NUDGE
     loser.y = monitor_rect.bottom - loser.height + 10
 
     # Use a module-preloaded monitor surface for instant start
@@ -369,7 +372,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         else:
             loser_target_x = max(8, left_x)
         # apply the same visual nudge as initial placement (left and up)
-        loser.x = int(loser_target_x) - 8
+        loser.x = int(loser_target_x) - 8 + LOSER_NUDGE
         loser.y = monitor_rect.bottom - loser.height + 10
         # Prevent duplicate avatars: temporarily hide loser's avatar while drawing base sprite
         try:
@@ -621,7 +624,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
                     loser_target_x = right_x
                 else:
                     loser_target_x = max(8, left_x)
-                loser.x = int(loser_target_x) - 8
+                loser.x = int(loser_target_x) - 8 + LOSER_NUDGE
                 loser.y = monitor_rect.bottom - loser.height + 10
 
                 _saved_avatar = getattr(loser, 'avatar', None)
