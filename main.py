@@ -379,6 +379,30 @@ def main():
                         pass
         except Exception:
             pass
+
+        # Start gameplay background music (loop) after the start screen finishes
+        game_music_path = None
+        try:
+            repo_root = os.path.abspath(os.path.dirname(__file__))
+            game_music_path = os.path.join(repo_root, 'assets', 'Game sound.mp3')
+            try:
+                # use mixer.music for streaming background track
+                try:
+                    if not pygame.mixer.get_init():
+                        pygame.mixer.init()
+                except Exception:
+                    pass
+                pygame.mixer.music.load(game_music_path)
+                try:
+                    pygame.mixer.music.set_volume(0.6)
+                except Exception:
+                    pass
+                pygame.mixer.music.play(loops=-1)
+                print(f"[MUSIC] started gameplay music: {game_music_path}")
+            except Exception as e:
+                print(f"[MUSIC] failed to start gameplay music: {game_music_path} -> {e}")
+        except Exception:
+            game_music_path = None
     except SystemExit:
         pygame.quit()
         sys.exit()
@@ -700,6 +724,19 @@ def main():
         # 游戏结束画面
         if game_over:
             if not score_shown:
+                # stop or fade out gameplay music before showing the score animation
+                try:
+                    if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                        try:
+                            pygame.mixer.music.fadeout(500)
+                        except Exception:
+                            try:
+                                pygame.mixer.music.stop()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
                 # determine winner and loser objects
                 if winner == "PLAYER 1":
                     play_score_animation(screen, player1, player2, winner_avatar=local_p1)
