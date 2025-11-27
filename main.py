@@ -417,15 +417,15 @@ def main():
                 
                 if not game_over:
                     if event.key == player1.controls['attack']:
-                        skill_used = player1.use_skill()
-                        if skill_used:
-                            last_p1_skill = skill_used
-                            # 播放攻击音效（如果已加载）
+                            # 每次按下攻击键都播放音效（无论是否有技能）
                             try:
                                 if attack_sound:
                                     attack_sound.play()
                             except Exception:
                                 pass
+                            skill_used = player1.use_skill()
+                            if skill_used:
+                                last_p1_skill = skill_used
                             if skill_used == 'print':
                                 proj_x = player1.x + player1.width if player1.facing_right else player1.x
                                 proj_y = player1.y + player1.height // 2
@@ -433,15 +433,15 @@ def main():
                                 projectiles.append(Projectile(proj_x, proj_y, direction, player1))
                     
                     if event.key == player2.controls['attack']:
+                        # 每次按下攻击键都播放音效（无论是否有技能）
+                        try:
+                            if attack_sound:
+                                attack_sound.play()
+                        except Exception:
+                            pass
                         skill_used = player2.use_skill()
                         if skill_used:
                             last_p2_skill = skill_used
-                            # 播放攻击音效（如果已加载）
-                            try:
-                                if attack_sound:
-                                    attack_sound.play()
-                            except Exception:
-                                pass
                             if skill_used == 'print':
                                 proj_x = player2.x + player2.width if player2.facing_right else player2.x
                                 proj_y = player2.y + player2.height // 2
