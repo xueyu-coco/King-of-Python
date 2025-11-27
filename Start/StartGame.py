@@ -82,7 +82,8 @@ def run_start(screen, clock):
 
             # 可选：在底部显示提示文字
             sub = prompt_font.render('press space to start', True, (180, 180, 180))
-            screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT - 60))
+            left_offset = 40  # shift text slightly left of center for better balance
+            screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2 - left_offset, HEIGHT - 190))
 
             pygame.display.flip()
     finally:
