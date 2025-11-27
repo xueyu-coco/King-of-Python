@@ -92,17 +92,31 @@ except Exception:
     FINAL_BG_UPDATE_SURF = None
 
 # Pre-scale the updated final background to cover the screen (cover semantics)
+# We allow separate overall scaling and width-compression so the image can be
+# slightly larger while being narrower horizontally (user-requested).
 FINAL_BG_UPDATE_SCALED = None
 try:
     if FINAL_BG_UPDATE_SURF is not None:
         bw, bh = FINAL_BG_UPDATE_SURF.get_size()
-        scale = max(WIDTH / bw, HEIGHT / bh)
-        new_w = max(1, int(bw * scale))
-        new_h = max(1, int(bh * scale))
+        # Slightly enlarge overall, but compress horizontal length more
+        OVERALL_BG_SCALE = 1.02  # slightly smaller overall scale
+        BG_WIDTH_COMPRESS = 0.82  # reduce horizontal compression (less squashed)
+        BG_HEIGHT_COMPRESS = 0.82  # slightly stronger vertical compression to reduce height a bit
+        base_scale = max(WIDTH / bw, HEIGHT / bh) * OVERALL_BG_SCALE
+        new_w = max(1, int(bw * base_scale * BG_WIDTH_COMPRESS))
+        new_h = max(1, int(bh * base_scale * BG_HEIGHT_COMPRESS))
+        # Prevent vertical cropping: if the compressed height still exceeds the
+        # screen height, scale down so new_h == HEIGHT (no top/bottom cutoff).
+        if new_h > HEIGHT:
+            scale_down = HEIGHT / float(new_h)
+            new_h = HEIGHT
+            new_w = max(1, int(new_w * scale_down))
         try:
             FINAL_BG_UPDATE_SCALED = pygame.transform.smoothscale(FINAL_BG_UPDATE_SURF, (new_w, new_h))
         except Exception:
             FINAL_BG_UPDATE_SCALED = pygame.transform.scale(FINAL_BG_UPDATE_SURF, (new_w, new_h))
+    else:
+        FINAL_BG_UPDATE_SCALED = None
 except Exception:
     FINAL_BG_UPDATE_SCALED = None
 
@@ -125,9 +139,22 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         if FINAL_BG_UPDATE_SCALED is not None:
             try:
                 bw, bh = FINAL_BG_UPDATE_SCALED.get_size()
-                bx = (WIDTH - bw) // 2
-                by = (HEIGHT - bh) // 2
-                # draw the pre-scaled background (covers whole screen)
+                # small offset to nudge the image slightly right
+                FINAL_BG_OFFSET_X = 20
+                FINAL_BG_OFFSET_Y = 12
+                bx = (WIDTH - bw) // 2 + FINAL_BG_OFFSET_X
+                by = (HEIGHT - bh) // 2 + FINAL_BG_OFFSET_Y
+                # Clamp vertical position so the image never extends off-screen
+                if by < 0:
+                    by = 0
+                if by + bh > HEIGHT:
+                    by = HEIGHT - bh
+                # Clear to solid black first so no gameplay remnants show outside the background
+                try:
+                    surface.fill(BLACK)
+                except Exception:
+                    surface.fill((0, 0, 0))
+                # draw the pre-scaled background (centered)
                 surface.blit(FINAL_BG_UPDATE_SCALED, (bx, by))
             except Exception:
                 # fallback to the purple frame if blit fails
@@ -505,9 +532,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
                 pygame.draw.polygon(screen, ORANGE, points)
                 pygame.draw.polygon(screen, YELLOW, points, 2)
 
-        # overlay small caption
-        sub_text = font_small.render("The King sits at his throne", True, BLACK)
-        screen.blit(sub_text, (50, 100))
+    # top-left caption removed per UX request
 
         # draw tears for loser
         if random.random() < 0.12:
@@ -524,11 +549,225 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
         pygame.display.flip()
 
-        # early exit when crown animation done
+        # early exit when crown animation done (mark finished instead of returning immediately)
+        finished = False
         if not walking and sit_timer <= 0 and crown_timer <= 0:
+            finished = True
             break
 
-    # no blocking waits here — return immediately for a smooth transition back to game
+    # If the animation reached the finished state, keep rendering the final scene
+    # until the player presses SPACE. This allows the animation to loop indefinitely
+    # and only continue when the user confirms.
+    if 'finished' in locals() and finished:
+        waiting = True
+        while waiting:
+            clock.tick(FPS)
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT:
+                    return
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE:
+                    waiting = False
+            # Advance jump animation so the winner keeps bouncing while waiting
+            try:
+                if not walking:
+                    jump_phase += jump_speed
+                    offset = -int(abs(math.sin(jump_phase)) * jump_height)
+                    base_y = vt_rect.top - winner.height - VT_FEET_GAP
+                    winner.y = base_y + offset
+                    # allow crown once the winner is roughly at base_y
+                    if not crown_allowed:
+                        try:
+                            if abs(winner.y - base_y) <= 2:
+                                crown_allowed = True
+                        except Exception:
+                            crown_allowed = True
+                winner.x = int(winner.x)
+            except Exception:
+                pass
+
+            # redraw final UI and scene each frame
+            draw_score_ui(screen)
+
+            # draw monitor (use preloaded image if available)
+            if monitor_s is not None:
+                try:
+                    screen.blit(monitor_s, (monitor_rect.centerx - monitor_s.get_width()//2, monitor_rect.centery - monitor_s.get_height()//2))
+                except Exception:
+                    pass
+            else:
+                try:
+                    base_h = 12
+                    base_rect = pygame.Rect(monitor_rect.left, monitor_rect.bottom + 6, comp_w, base_h)
+                    pygame.draw.rect(screen, KEY_SIDE, base_rect)
+                    pygame.draw.rect(screen, KEY_COLOR, monitor_rect)
+                    pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
+                    pygame.draw.rect(screen, KEY_SIDE, (chair_x, chair_y, 50, 10))
+                    pygame.draw.rect(screen, KEY_COLOR, (chair_x, chair_y - 30, 50, 30))
+                except Exception:
+                    pass
+
+            # draw VICTORY text
+            try:
+                screen.blit(vt, vt_rect)
+            except Exception:
+                pass
+
+            # draw loser (reuse the same safe avatar logic)
+            try:
+                side_spacing = 8
+                right_x = monitor_rect.right + side_spacing
+                left_x = monitor_rect.left - side_spacing - loser.width
+                if right_x + loser.width + 16 < WIDTH:
+                    loser_target_x = right_x
+                else:
+                    loser_target_x = max(8, left_x)
+                loser.x = int(loser_target_x) - 8
+                loser.y = monitor_rect.bottom - loser.height + 10
+
+                _saved_avatar = getattr(loser, 'avatar', None)
+                _saved_cached = getattr(loser, '_cached_avatar', None)
+                try:
+                    loser.avatar = None
+                except Exception:
+                    pass
+                try:
+                    loser._cached_avatar = None
+                except Exception:
+                    pass
+
+                loser.draw(screen)
+
+                avatar_surf = _saved_avatar or _saved_cached
+                if avatar_surf:
+                    try:
+                        aw, ah = avatar_surf.get_size()
+                        max_aw = int(loser.width * 0.5)
+                        max_ah = int(loser.height * 0.5)
+                        scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                        new_w = max(1, int(aw * scale))
+                        new_h = max(1, int(ah * scale))
+                        try:
+                            av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                        except Exception:
+                            av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                        ax = int(loser.x + (loser.width - av.get_width()) / 2)
+                        ay = int(loser.y + (loser.height - av.get_height()) / 2)
+                        screen.blit(av, (ax, ay))
+                    except Exception:
+                        pass
+                try:
+                    loser.avatar = _saved_avatar
+                except Exception:
+                    pass
+                try:
+                    loser._cached_avatar = _saved_cached
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+            # draw enlarged winner and avatar
+            try:
+                scale = WINNER_SCALE
+                expanded_w = int(winner.width * scale)
+                expanded_h = int(winner.height * scale)
+                draw_x = int(winner.x + winner.width / 2 - expanded_w / 2)
+                draw_y = int(winner.y + winner.height - expanded_h)
+
+                if getattr(winner, 'use_image', False) and getattr(winner, 'current_image', None):
+                    img = winner.current_image
+                    if not winner.facing_right:
+                        try:
+                            img = pygame.transform.flip(img, True, False)
+                        except Exception:
+                            pass
+                    try:
+                        big = pygame.transform.smoothscale(img, (expanded_w, expanded_h))
+                    except Exception:
+                        big = pygame.transform.scale(img, (expanded_w, expanded_h))
+                    screen.blit(big, (draw_x, draw_y))
+                    avatar_surf = None
+                    if getattr(winner, 'avatar', None):
+                        avatar_surf = winner.avatar
+                    elif getattr(winner, '_cached_avatar', None):
+                        avatar_surf = winner._cached_avatar
+
+                    if avatar_surf:
+                        try:
+                            aw, ah = avatar_surf.get_size()
+                            max_aw = int(expanded_w * 0.5)
+                            max_ah = int(expanded_h * 0.5)
+                            scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                            new_w = max(1, int(aw * scale))
+                            new_h = max(1, int(ah * scale))
+                            try:
+                                av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                            except Exception:
+                                av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                            ax = draw_x + (expanded_w - av.get_width()) // 2
+                            ay = draw_y + (expanded_h - av.get_height()) // 2
+                            screen.blit(av, (ax, ay))
+                        except Exception:
+                            pass
+                else:
+                    pygame.draw.rect(screen, winner.color, (draw_x, draw_y, expanded_w, expanded_h))
+                    avatar_surf = getattr(winner, 'avatar', None) or getattr(winner, '_cached_avatar', None)
+                    if avatar_surf:
+                        try:
+                            aw, ah = avatar_surf.get_size()
+                            max_aw = int(expanded_w * 0.5)
+                            max_ah = int(expanded_h * 0.5)
+                            scale = min(max_aw / aw if aw else 1, max_ah / ah if ah else 1, 1)
+                            new_w = max(1, int(aw * scale))
+                            new_h = max(1, int(ah * scale))
+                            try:
+                                av = pygame.transform.smoothscale(avatar_surf, (new_w, new_h))
+                            except Exception:
+                                av = pygame.transform.scale(avatar_surf, (new_w, new_h))
+                            ax = draw_x + (expanded_w - av.get_width()) // 2
+                            ay = draw_y + (expanded_h - av.get_height()) // 2
+                            screen.blit(av, (ax, ay))
+                        except Exception:
+                            pass
+            except Exception:
+                try:
+                    winner.draw(screen)
+                except Exception:
+                    pass
+
+            # draw crown
+            try:
+                if crown is not None:
+                    cw, ch = crown.get_size()
+                    desired_w = int(winner.width * WINNER_SCALE * 0.9)
+                    scale_h = int(ch * (desired_w / cw)) if cw else ch
+                    crown_s = pygame.transform.smoothscale(crown, (max(1, desired_w), max(1, scale_h)))
+                    cx = int(winner.x + winner.width//2)
+                    cy = int(winner.y - 22)
+                    screen.blit(crown_s, (cx - crown_s.get_width()//2, cy - crown_s.get_height()//2))
+            except Exception:
+                pass
+
+            # tears update
+            try:
+                if random.random() < 0.12:
+                    eye_x = int(loser.x + loser.width * 0.5)
+                    eye_y = int(loser.y + 16)
+                    tears.append({'x': eye_x + random.randint(-6, 6), 'y': eye_y, 'vy': 2 + random.random()*2})
+            except Exception:
+                pass
+
+            for t in tears[:]:
+                try:
+                    pygame.draw.circle(screen, CYAN, (int(t['x']), int(t['y'])), 3)
+                    t['y'] += t['vy']
+                    t['vy'] += 0.12
+                    if t['y'] > HEIGHT:
+                        tears.remove(t)
+                except Exception:
+                    pass
+
+            pygame.display.flip()
 
     # Restore saved gameplay state so players resume normal behavior after the animation
     try:
