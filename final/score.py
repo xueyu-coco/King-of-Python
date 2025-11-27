@@ -137,6 +137,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     walking = True
     sit_timer = 0
     crown_timer = 0
+    crown_allowed = False
     # Prepare jump animation params
     jump_phase = 0.0
     jump_speed = 0.18
@@ -226,6 +227,13 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             # place the winner so their feet sit above the top of the VICTORY text
             base_y = vt_rect.top - winner.height - VT_FEET_GAP
             winner.y = base_y + offset
+            # allow crown once the winner has actually reached the base_y (i.e. above VICTORY)
+            if not crown_allowed:
+                try:
+                    if abs(winner.y - base_y) <= 2:
+                        crown_allowed = True
+                except Exception:
+                    crown_allowed = True
         winner.x = int(winner.x)
         # draw enlarged winner for the final animation (do not modify Player permanently)
         try:
@@ -303,7 +311,8 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
         # no avatar above the winner in the final animation (keep screen clean)
         # show crown when timer active OR when the winner has started the jump animation
-        if crown_timer > 0 or (not walking and sit_timer <= 0 and jump_phase > 0) or (jump_phase > 0 and not walking):
+        # only draw crown after the winner has moved into position above VICTORY
+        if crown_allowed and (crown_timer > 0 or jump_phase > 0 or (not walking and sit_timer <= 0)):
             # position crown relative to the enlarged winner drawing
             cx = int(winner.x + winner.width//2)
             cy = int(winner.y - 22)
