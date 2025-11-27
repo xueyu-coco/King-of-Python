@@ -335,9 +335,50 @@ def main():
     except Exception:
         pass
     
+    # Prepare entry/start sound and play it when the start screen appears.
+    entry_sound = None
+    try:
+        repo_root = os.path.abspath(os.path.dirname(__file__))
+        entry_path = os.path.join(repo_root, 'assets', 'Game_Enter.mp3')
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+        except Exception:
+            pass
+        try:
+            entry_sound = pygame.mixer.Sound(entry_path)
+            try:
+                entry_sound.set_volume(0.7)
+            except Exception:
+                pass
+            # play once when start screen is shown
+            try:
+                entry_sound.play()
+                print(f"[SFX] played entry_sound: {entry_path}")
+            except Exception:
+                pass
+        except Exception as e:
+            entry_sound = None
+            print(f"[SFX] failed to load entry_sound: {entry_path} -> {e}")
+    except Exception:
+        entry_sound = None
+
     # Use the new Start screen module to show a stylized start menu.
     try:
         action = run_start(screen, clock)
+        # If the player pressed SPACE (capture) to start the game, stop the entry music
+        try:
+            if action == 'capture' and entry_sound:
+                # prefer a short fadeout for smoothness, fallback to stop()
+                try:
+                    entry_sound.fadeout(250)
+                except Exception:
+                    try:
+                        entry_sound.stop()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     except SystemExit:
         pygame.quit()
         sys.exit()
