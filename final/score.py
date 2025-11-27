@@ -1,8 +1,48 @@
 import pygame
-import time
+import os
 import math
 import random
 from settings import WIDTH, HEIGHT, KEY_SIDE, KEY_COLOR, KEY_SHADOW, ORANGE, YELLOW, BLACK, font_small, font_medium, CYAN, FPS
+
+
+# Preload and clean monitor image at module import so animation can start instantly
+MONITOR_SURF = None
+try:
+    # Prefer a no-background asset if present (user-supplied image)
+    base_dir = os.path.dirname(__file__)
+    preferred = os.path.join(base_dir, 'Computer_nobackground.png')
+    fallback = os.path.join(base_dir, 'computer.png')
+    img_path = preferred if os.path.exists(preferred) else fallback
+    _raw = pygame.image.load(img_path)
+    # If the loaded image already has per-pixel alpha, use it directly
+    if _raw.get_flags() & pygame.SRCALPHA or _raw.get_alpha() is not None:
+        _raw = _raw.convert_alpha()
+        _mw, _mh = _raw.get_size()
+        target_w, target_h = 520 - 20, 360 - 20
+        scale = min(target_w / _mw, target_h / _mh)
+        MONITOR_SURF = pygame.transform.smoothscale(_raw, (max(1, int(_mw * scale)), max(1, int(_mh * scale))))
+    else:
+        # Image has no alpha channel; remove near-white background into an alpha surface
+        _raw = _raw.convert()
+        _mw, _mh = _raw.get_size()
+        _clean = pygame.Surface((_mw, _mh), pygame.SRCALPHA)
+        try:
+            _px = pygame.surfarray.pixels3d(_raw)
+            # no alpha channel present; treat near-white pixels as transparent
+            for _y in range(_mh):
+                for _x in range(_mw):
+                    r, g, b = _px[_x, _y]
+                    if r > 245 and g > 245 and b > 245:
+                        continue
+                    _clean.set_at((_x, _y), (r, g, b, 255))
+        except Exception:
+            # fallback: blit raw to clean (no transparency cleanup)
+            _clean.blit(_raw, (0, 0))
+        target_w, target_h = 520 - 20, 360 - 20
+        scale = min(target_w / _mw, target_h / _mh)
+        MONITOR_SURF = pygame.transform.smoothscale(_clean, (max(1, int(_mw * scale)), max(1, int(_mh * scale))))
+except Exception:
+    MONITOR_SURF = None
 
 
 def play_score_animation(screen, winner, loser, winner_avatar=None):
@@ -12,7 +52,7 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             cx = x + i * spacing
             left = (cx - size//4, y)
             right = (cx + size//4, y)
-            top = (cx, y - size//3)
+            # top point not used explicitly; circle + polygon form the heart
             pygame.draw.circle(surface, color, left, size//3)
             pygame.draw.circle(surface, color, right, size//3)
             points = [(cx - size//2, y), (cx + size//2, y), (cx, y + size//2)]
@@ -32,18 +72,18 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
             cx = center_x + (i - 1) * 120
             pygame.draw.circle(surface, col, (cx, yy), 40)
             pygame.draw.circle(surface, (160, 80, 200), (cx, yy), 44, 4)
-        # 底部左侧小圆和pac-man
-        bottom_y = inner_rect.bottom - 30
-        pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, bottom_y), 18)
-        pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, bottom_y - 10), (inner_rect.left + 100, bottom_y - 10), (inner_rect.left + 90, bottom_y + 10)])
-        # 底部右侧BE HAPPY - 顶部与黄色圆形顶部对齐
-        be = font_medium.render('BE HAPPY', True, (160, 255, 220))
-        circle_top = bottom_y - 18  # 圆形顶部 = 圆心y - 半径
-        be_y = circle_top
-        surface.blit(be, (inner_rect.right - be.get_width() - 20, be_y))
-        # 底部说明文字（上移一些避免与BE HAPPY重叠）
-        sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
-        surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
+            # 底部左侧小圆和pac-man
+            bottom_y = inner_rect.bottom - 30
+            pygame.draw.circle(surface, (255, 230, 120), (inner_rect.left + 40, bottom_y), 18)
+            pygame.draw.polygon(surface, (255, 220, 80), [(inner_rect.left + 80, bottom_y - 10), (inner_rect.left + 100, bottom_y - 10), (inner_rect.left + 90, bottom_y + 10)])
+            # 底部右侧 title - 改为项目名称
+            be = font_medium.render('King of Python', True, (160, 255, 220))
+            circle_top = bottom_y - 18  # 圆形顶部 = 圆心y - 半径
+            be_y = circle_top
+            surface.blit(be, (inner_rect.right - be.get_width() - 20, be_y))
+            # 底部说明文字（上移一些避免与标题重叠）
+            sub = font_small.render('Press SPACE to continue', True, (220, 220, 240))
+            surface.blit(sub, (inner_rect.centerx - sub.get_width()//2, inner_rect.bottom - 80))
     """Play a short ending animation: winner walks to a computer, sits, and wears a crown.
 
     Args:
@@ -54,18 +94,23 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     """
     clock = pygame.time.Clock()
 
-    # (No special background) use normal BG_COLOR
-    from settings import BG_COLOR
+    # (No special background) use normal BG_COLOR (import from settings if needed at module level)
 
     # Setup simple scene positions (computer centered on screen)
-    comp_w = 240
-    comp_h = 140
+    # enlarge the monitor so the pixel-art image is more prominent
+    comp_w = 520
+    comp_h = 360
     # center monitor in the middle of the screen
     comp_x = WIDTH // 2
     comp_y = HEIGHT // 2 + 80  # slightly lower than exact center so characters sit comfortably
     monitor_rect = pygame.Rect(comp_x - comp_w // 2, comp_y - comp_h // 2 - 20, comp_w, comp_h)
     chair_x = comp_x - 40
     chair_y = monitor_rect.bottom + 6
+
+    # Pre-render VICTORY text and rect so we can position the winner above it
+    vt = font_medium.render("VICTORY", True, ORANGE)
+    vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery))
+    VT_FEET_GAP = 8  # pixels gap between top of victory text and winner's feet
 
     crown = None
     try:
@@ -97,6 +142,9 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
     loser_target_x = monitor_rect.left - 120
     loser.x = loser_target_x
     loser.y = monitor_rect.bottom - loser.height + 20
+
+    # Use a module-preloaded monitor surface for instant start
+    monitor_s = MONITOR_SURF
 
     # Walk loop: move winner toward target_x
     for frame in range(FPS * 6):  # up to 6 seconds
@@ -131,20 +179,25 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
         # 再画原有胜利场景（电脑、椅子、角色等）
         # draw computer (base + monitor)
-        base_h = 12
-        base_rect = pygame.Rect(monitor_rect.left, monitor_rect.bottom + 6, comp_w, base_h)
-        pygame.draw.rect(screen, KEY_SIDE, base_rect)
-        pygame.draw.rect(screen, KEY_COLOR, monitor_rect)
-        pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
+        # Prefer using a pixel-art monitor image if available in final/computer.png
+        # draw monitor: use preloaded image if available
+        if monitor_s is not None:
+            screen.blit(monitor_s, (monitor_rect.centerx - monitor_s.get_width()//2, monitor_rect.centery - monitor_s.get_height()//2))
+        else:
+            base_h = 12
+            base_rect = pygame.Rect(monitor_rect.left, monitor_rect.bottom + 6, comp_w, base_h)
+            pygame.draw.rect(screen, KEY_SIDE, base_rect)
+            pygame.draw.rect(screen, KEY_COLOR, monitor_rect)
+            pygame.draw.rect(screen, KEY_SHADOW, monitor_rect, 3)
 
-        # place big winner text on monitor - 完全居中
-        vt = font_medium.render("VICTORY", True, ORANGE)
-        vt_rect = vt.get_rect(center=(monitor_rect.centerx, monitor_rect.centery))
+            # draw chair (decorative) under the monitor area only when drawing the fallback monitor
+            pygame.draw.rect(screen, KEY_SIDE, (chair_x, chair_y, 50, 10))
+            pygame.draw.rect(screen, KEY_COLOR, (chair_x, chair_y - 30, 50, 30))
+
+        # draw VICTORY text at the same position each frame (position unchanged)
         screen.blit(vt, vt_rect)
 
-        # draw chair (decorative) under the monitor area
-        pygame.draw.rect(screen, KEY_SIDE, (chair_x, chair_y, 50, 10))
-        pygame.draw.rect(screen, KEY_COLOR, (chair_x, chair_y - 30, 50, 30))
+    # (chair is drawn with the fallback monitor only)
 
         # draw loser near the computer (to the left)
         loser_target_x = monitor_rect.left - 120
@@ -156,7 +209,8 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
         if not walking:
             jump_phase += jump_speed
             offset = -int(abs(math.sin(jump_phase)) * jump_height)
-            base_y = monitor_rect.top - winner.height + 6
+            # place the winner so their feet sit above the top of the VICTORY text
+            base_y = vt_rect.top - winner.height - VT_FEET_GAP
             winner.y = base_y + offset
         winner.x = int(winner.x)
         winner.draw(screen)
@@ -201,9 +255,6 @@ def play_score_animation(screen, winner, loser, winner_avatar=None):
 
         # early exit when crown animation done
         if not walking and sit_timer <= 0 and crown_timer <= 0:
-            # leave the final frame for a short time
-            time.sleep(1.2)
             break
 
-    # small pause at end
-    time.sleep(0.6)
+    # no blocking waits here — return immediately for a smooth transition back to game
