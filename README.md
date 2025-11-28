@@ -17,6 +17,8 @@ Real-time Face Capture Avatar:
 - Automatically converts real faces into pixel-art game character avatars.
 Mechanical Keyboard Battlefield:
 - The arena is composed of giant keyboard keys (Space, Shift, Tab, QWER...).
+ 
+ ![Arena screenshot](game_scene.png)
 - Dynamic environment: Tab key moves left and right, Shift key breaks when stepped on too long!
 Programmer-Exclusive Skills:
 Pick up falling code bubbles to unleash print(), super(), or throw a TypeError at your opponent!
