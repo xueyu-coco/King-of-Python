@@ -737,6 +737,23 @@ def main():
                 except Exception:
                     pass
 
+                # play one-shot score/settlement sound (non-looping)
+                try:
+                    repo_root = os.path.abspath(os.path.dirname(__file__))
+                    score_sound_path = os.path.join(repo_root, 'assets', 'score_sound.mp3')
+                    try:
+                        score_snd = pygame.mixer.Sound(score_sound_path)
+                        try:
+                            score_snd.set_volume(0.9)
+                        except Exception:
+                            pass
+                        score_snd.play()
+                        print(f"[SFX] played score sound: {score_sound_path}")
+                    except Exception as e:
+                        print(f"[SFX] failed to load/play score sound: {score_sound_path} -> {e}")
+                except Exception:
+                    pass
+
                 # determine winner and loser objects
                 if winner == "PLAYER 1":
                     play_score_animation(screen, player1, player2, winner_avatar=local_p1)
