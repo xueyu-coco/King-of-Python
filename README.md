@@ -6,11 +6,6 @@ King of Python is a local two-player fighting game built with Pygame. It combine
 
 ![Start screen](StartGamePic.png)
 
-![Start screen](Gamevideo1.mp4)
-
-
-
-
 
 ---
 
@@ -80,6 +75,14 @@ If you skip avatars or MediaPipe fails to install, set `DISABLE_FACE=1` before l
 cd King-of-Python
 python main.py
 ```
+
+## Demo Video
+
+<video controls width="640">
+	<source src="Gamevideo1.mp4" type="video/mp4" />
+	Your browser does not support embedded video. You can download the clip directly via
+	<a href="Gamevideo1.mp4">Gamevideo1.mp4</a>.
+</video>
 
 Optional face-login flow (saves circular PNG avatars under `face_detection/outputs/`):
 
