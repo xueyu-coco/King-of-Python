@@ -23,6 +23,8 @@ Mechanical Keyboard Battlefield:
 Programmer-Exclusive Skills:
 Pick up falling code bubbles to unleash print(), super(), or throw a TypeError at your opponent!
 
+ ![Bubbles screenshot](game_scene_1.png)
+
 ---
 
 ## Controls
