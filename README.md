@@ -6,7 +6,7 @@ King of Python is a local two-player fighting game built with Pygame. It combine
 
 ![Start screen](StartGamePic.png)
 
-![Start screen](Gamevideo.mp4)
+![Start screen](Gamevideo1.mp4)
 
 
 
